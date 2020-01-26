@@ -28,9 +28,10 @@ FAQ
  ```
 
 Solution:
-Open a PowerShell window (as administrator)
-Run `Set-ExecutionPolicy RemoteSigned` and press "Y" when prompted
-Try running the powershell script again.
+* Open a PowerShell window (as administrator)
+* Run `Set-ExecutionPolicy RemoteSigned` and press "Y" when prompted
+* Try running the powershell script again.
 
- enjoy!
+
+Enjoy!
 
