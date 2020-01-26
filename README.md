@@ -33,5 +33,74 @@ Solution:
 * Try running the powershell script again.
 
 
+2. On Windows 10 (1903/1909), WinDBG throws an error when running `!peb` or when trying to run mona.py commands:
+
+```
+0:000> !peb
+PEB at xxxxxxxx
+error 3 InitTypeRead
+``` 
+
+It looks like MS may have removed(?) type information from the latest symbol files associated with ntdll.dll.
+As a workaround, you can try the following procedure:
+
+1. Open folder `c:\symbols\wntdll.dll` and delete all subfolders
+2. Open and administrator command prompt
+3. Run `C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg.exe -o c:\windows\system32\calc.exe`
+4. In WinDBG, run `!peb` and confirm that it is still broken
+5. Close WinDBG and open folder `c:\symbols\wntdll.dll`.  There should be one subfolder, for instance `D85FCE08D56038E2C69B69F29E11B5EE1`(the actual name could be different). Open the folder and remove wntdll.pdb from that folder. We'll call this the `original` folder.  Leave this original `D85FCE08D56038E2C69B69F29E11B5EE1` folder open.
+6. Download wntdllsymbolfix.zip file from this repository
+7. Extract the zipfile directly into the `c:\symbols\wntdll.dll` folder. You should get an additional folder and a file:
+- Folder: `6BFA8EAE64E07F11AD6B27F575C7BDC21`
+- File: `chkmatch.exe`
+8. From inside the new `6BFA8EAE64E07F11AD6B27F575C7BDC21` folder, copy wntdll.pdb and paste it into the other folder (the `original` folder, where you just removed wntdll.pdb)
+3. Open an administrator command prompt and go to the `c:\symbols\wntdll.dll` folder
+4. Run the following command to forcibly match ntdll.dll with the older symbol file (replace <foldername> with the name of the `original` folder):
+
+```
+ChkMatch.exe -m c:\Windows\SysWOW64\ntdll.dll c:\symbols\wntdll.pdb\<foldername>\wntdll.pdb
+```
+
+
+
+Example output:
+
+```
+C:\symbols\wntdll.pdb>ChkMatch.exe -m c:\Windows\SysWOW64\ntdll.dll c:\symbols\wntdll.pdb\D85FCE08D56038E2C69B69F29E11B5EE1\wntdll.pdb
+ChkMatch - version 1.0
+Copyright (C) 2004 Oleg Starodumov
+http://www.debuginfo.com/
+
+
+Executable: c:\Windows\SysWOW64\ntdll.dll
+Debug info file: c:\symbols\wntdll.pdb\6BFA8EAE64E07F11AD6B27F575C7BDC21\wntdll.pdb
+
+Executable:
+TimeDateStamp: a4208572
+Debug info: 2 ( CodeView )
+TimeStamp: a4208572  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 35  RVA: 000255e8  FileOffset: 000249e8
+CodeView format: RSDS
+Signature: {d85fce08-d560-38e2-c69b-69f29e11b5ee}  Age: 1
+PdbFile: wntdll.pdb
+Debug info: 13 ( Unknown )
+TimeStamp: a4208572  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 1252  RVA: 0002560c  FileOffset: 00024a0c
+Debug info: 16 ( Unknown )
+TimeStamp: a4208572  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 36  RVA: 00025af0  FileOffset: 00024ef0
+
+Debug information file:
+Format: PDB 7.00
+Signature: {6bfa8eae-64e0-7f11-ad6b-27f575c7bdc2}  Age: 2
+
+Writing to the debug information file...
+Result: Success.
+
+```
+
+5. Open WinDBG again (`C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg.exe -o c:\windows\system32\calc.exe`), run `!peb` and verify that the issue has been resolved
+
+
 Enjoy!
 
