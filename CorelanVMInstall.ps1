@@ -83,8 +83,8 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Start-Process "$env:tempfolder\$env:windbgfile" -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q'
 	Write-Output "    5. PyKD, windbglib & mona"
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
-	Copy-Item -Path "$env:tempfolder\pykd.pyd" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
-	Copy-Item -Path "$env:tempfolder\$env:pykdfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\"
+	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
+	Copy-Item -Path "$env:tempfolder\pykd.pyd" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\"
 	
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
 	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
