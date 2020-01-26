@@ -1,4 +1,7 @@
-This repository contains script(s) to assist with the setup of Virtual Machines, in preparation for Corelan Windows Exploit Development Training
+This repository contains script(s) to assist with the setup of Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
+
+For info on classes, see https://www.corelan-training.com/
+
 
 Usage
 -----
