@@ -95,7 +95,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output ""
 	Write-Output "==> Please check the WinDBG log window and confirm that:"
 	Write-Output "    - the !peb command didn't produce an error message"
-	Write-Output "    - the !py mona command resulting in producing a list of available mona commands"
+	Write-Output "    - the !py mona command resulted in producing a list of available mona commands"
 	
 }
 else
