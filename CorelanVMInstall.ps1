@@ -1,6 +1,8 @@
 #Requires -RunAsAdministrator
 #
-# (c) Corelan Consulting bv - 2002
+# (c) Corelan Consulting bv - 2020
+# www.corelan-consulting.com
+# www.corelan-training.com
 #
 # PowerShell script to prepare a Windows 10 machine for use in the  
 # Corelan 'Advanced' Windows Exploit Development training
