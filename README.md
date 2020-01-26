@@ -20,9 +20,9 @@ Usage
 FAQ 
 ----
 
-My ƒreshly installed Windows 10 doesn't allow me to run your powershell script. It produces the following error message:
-./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
- this system. For more information, see about_Execution_Policies at https:/go.microsoft.com/fwlink/?LinkID=135170.
+1. Help! My freshly installed Windows 10 doesn't allow me to run your powershell script. It produces the following error message:
+```./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
+ this system. For more information, see about_Execution_Policies at https:/go.microsoft.com/fwlink/?LinkID=135170.```
 
 Solution:
 Open a PowerShell window (as administrator)
@@ -30,3 +30,4 @@ Run `Set-ExecutionPolicy RemoteSigned` and press "Y" when prompted
 Try running the powershell script again.
 
  enjoy!
+
