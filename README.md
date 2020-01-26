@@ -20,7 +20,9 @@ Usage
 FAQ 
 ----
 
-1. Help! My freshly installed Windows 10 doesn't allow me to run your powershell script. It produces the following error message:
+## File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on this system
+
+My freshly installed Windows 10 doesn't allow me to run your powershell script. It produces the following error message:
 
 ```
 ./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
@@ -33,7 +35,10 @@ Solution:
 * Try running the powershell script again.
 
 
-2. On Windows 10 (1903/1909), WinDBG throws an error when running `!peb` or when trying to run mona.py commands:
+
+##  !peb produces 'error 3 InitTypeRead' on Windows 10 1903/1909
+
+On Windows 10 (1903/1909), WinDBG throws an error when running `!peb` or when trying to run mona.py commands:
 
 ```
 0:000> !peb
