@@ -62,7 +62,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	}
 	else
 	{ 
-		$newpath = "$oldpath;c:\Python27"
+		$newPath = "$oldpath;c:\Python27"
 		Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath
 	}
 	
