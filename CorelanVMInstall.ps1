@@ -11,6 +11,7 @@
 $env:tempfolder = "c:\corelantemp"
 $env:pythonfile = "python-2.7.17.msi"
 $env:windbgfile = "winsdksetup.exe"
+$env:vscommunityfile = "vs_WDExpress.exe"
 $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdfile = "pykd.zip"
@@ -49,7 +50,9 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Invoke-WebRequest -Uri "https://github.com/corelan/mona/raw/master/mona.py" -OutFile "$env:tempfolder\$env:monafile" *>$null
 	Write-Output "    5. windbglib.py"
 	Invoke-WebRequest -Uri "https://github.com/corelan/windbglib/raw/master/windbglib.py" -OutFile "$env:tempfolder\$env:windbglibfile" *>$null
-	
+	Write-Output "    6. Visual Studio 2017 Desktop Express"
+	Invoke-WebRequest -Uri "https://aka.ms/vs/15/release/vs_WDExpress.exe" -OutFile "$env:tempfolder\$env:vscommunityfile" *>$null
+
 
 	Write-Output "[+] Creating System Environment variable _NT_SYMBOL_PATH"
 	[Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
@@ -88,6 +91,9 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\pykd.pyd" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\"
 	
+	Write-Output "    5. Visual Studio 2017 Desktop Express - manual install"
+	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
+
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
 	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
 	
