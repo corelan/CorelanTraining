@@ -49,17 +49,17 @@ error 3 InitTypeRead
 It looks like MS may have removed(?) type information from the latest symbol files associated with ntdll.dll.
 As a workaround, you can try the following procedure:
 
-1. Open folder `c:\symbols\wntdll.dll` and delete all subfolders
+1. Open folder `c:\symbols\wntdll.pdb` and delete all subfolders
 2. Open an administrator command prompt
 3. Run `C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg.exe -o c:\windows\system32\calc.exe`
 4. In WinDBG, run `!peb` and confirm that it is still broken
-5. Close WinDBG and open folder `c:\symbols\wntdll.dll`.  There should be only one subfolder, for instance `D85FCE08D56038E2C69B69F29E11B5EE1`(the actual name could be different). Open the folder and remove wntdll.pdb from that folder. We'll call this the `original` folder.  Leave this original `D85FCE08D56038E2C69B69F29E11B5EE1` folder open.
+5. Close WinDBG and open folder `c:\symbols\wntdll.pdb`.  There should be only one subfolder, for instance `D85FCE08D56038E2C69B69F29E11B5EE1`(the actual name could be different). Open the folder and remove wntdll.pdb from that folder. We'll call this the `original` folder.  Leave this original `D85FCE08D56038E2C69B69F29E11B5EE1` folder open.
 6. Download wntdllsymbolfix.zip file from this repository
-7. Extract the zipfile directly into the `c:\symbols\wntdll.dll` folder. You should get an additional folder and a file:
+7. Extract the zipfile directly into the `c:\symbols\wntdll.pdb` folder. You should get an additional folder and a file:
 - Folder: `6BFA8EAE64E07F11AD6B27F575C7BDC21`
 - File: `ChkMatch.exe`
 8. From inside the new `6BFA8EAE64E07F11AD6B27F575C7BDC21` folder, copy wntdll.pdb and paste it into the `original` folder (the one where you just removed wntdll.pdb)
-3. Open an administrator command prompt and go to the `c:\symbols\wntdll.dll` folder
+3. Open an administrator command prompt and go to the `c:\symbols\wntdll.pdb` folder
 4. Run the following command to forcibly match ntdll.dll with the older symbol file (replace <foldername> with the name of the `original` folder):
 
 ```
