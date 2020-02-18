@@ -36,6 +36,9 @@ pause
 Write-Output "[+] Creating temp folder $env:tempfolder"
 New-Item -Path "c:\" -Name "corelantemp" -ItemType "directory" *>$null
 
+# Since all the URLs used for downloading packages uses TLS 1.2 so we need to make sure TLS 1.2 is being used while files been requested otherwise we get SSL error
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 if (Test-Path $env:tempfolder -PathType Container)
 { 
 	Write-Output "[+] Downloading packages to temp folder"
