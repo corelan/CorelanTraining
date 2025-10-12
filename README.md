@@ -1,4 +1,4 @@
-This repository contains script(s) to assist with the setup of Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
+This repository contains a Powershell script to assist with the setup of Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
 
 For info on classes, see https://www.corelan-training.com/
 
@@ -6,7 +6,7 @@ For info on classes, see https://www.corelan-training.com/
 Usage
 -----
 
-1. Download `CorelanVMInstall.ps1` to your Windows 10 VM
+1. Download `CorelanVMInstall.ps1` to your Windows 11/10 VM
 2. Open an administrator command prompt and go to the folder that contains the `CorelanVMInstall.ps1` file
 3. Verify/confirm that you have a working internet connection
 4. run `powershell ./CorelanVMInstall.ps1`
@@ -22,7 +22,7 @@ FAQ
 
 ## File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on this system
 
-My freshly installed Windows 10 doesn't allow me to run your powershell script. It produces the following error message:
+My freshly installed Windows 11/10 doesn't allow me to run your powershell script. It produces the following error message:
 
 ```
 ./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on

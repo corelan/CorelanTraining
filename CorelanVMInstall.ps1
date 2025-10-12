@@ -5,7 +5,7 @@
 # www.corelan-training.com
 # www.corelan-certified.com
 #
-# PowerShell script to prepare a Windows 10/11 machine for use in the  
+# PowerShell script to prepare a Windows 11/10 machine for use in the  
 # Corelan Heap Exploit Development Masterclass
 #
 
