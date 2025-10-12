@@ -1,11 +1,12 @@
-#Requires -RunAsAdministrator
+# Requires -RunAsAdministrator
 #
 # (c) Corelan Consulting bv - 2020
 # www.corelan-consulting.com
 # www.corelan-training.com
+# www.corelan-certified.com
 #
-# PowerShell script to prepare a Windows 10 machine for use in the  
-# Corelan 'Advanced' Windows Exploit Development training
+# PowerShell script to prepare a Windows 10/11 machine for use in the  
+# Corelan Heap Exploit Development Masterclass
 #
 
 $env:tempfolder = "c:\corelantemp"
@@ -98,7 +99,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
 
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
-	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
+	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !py mona config -set workingfolder c:\logs\%p; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
 	
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
@@ -111,6 +112,6 @@ if (Test-Path $env:tempfolder -PathType Container)
 }
 else
 { 
-	Write-Output "*** Oops, folder " + $env:tempfolder + " does not exist"
+	Write-Output "*** Oops, folder '$env:tempfolder' does not exist"
 }
 
