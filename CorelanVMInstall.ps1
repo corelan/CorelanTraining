@@ -102,8 +102,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !py mona config -set workingfolder c:\logs\%p; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
 	
 	Write-Output "[+] Installing WinDBGX"
-	Write-Output "    Press 'Y' when asked to agree to all the source agreements terms"
-	winget install Microsoft.WinDbg --silent
+	winget install Microsoft.WinDbg --silent --accept-package-agreements
 
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
