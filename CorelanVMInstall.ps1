@@ -90,20 +90,21 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "    4. WinDBG"
 	Write-Output "       Hold on, this may take a while..."
 	Start-Process "$env:tempfolder\$env:windbgfile" -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q'
-	Write-Output "    5. PyKD, windbglib & mona"
+
+	Write-Output "    5. WinDBGX"
+	winget install Microsoft.WinDbg --silent --accept-package-agreements
+
+	Write-Output "    6. PyKD, windbglib & mona"
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\pykd.pyd" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\"
 	
-	Write-Output "    5. Visual Studio 2017 Desktop Express - manual install"
+	Write-Output "    7. Visual Studio 2017 Desktop Express - manual install"
 	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
 
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
 	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !py mona config -set workingfolder c:\logs\%p; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
 	
-	Write-Output "[+] Installing WinDBGX"
-	winget install Microsoft.WinDbg --silent --accept-package-agreements
-
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
 	Write-Output "[+] All set"
