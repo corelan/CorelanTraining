@@ -43,9 +43,9 @@ New-Item -Path "c:\" -Name "corelantemp" -ItemType "directory" *>$null
 if (Test-Path $env:tempfolder -PathType Container)
 { 
 	Write-Output "[+] Downloading packages to temp folder"
-	Write-Output "    1. Python 2.7.17"
-	Invoke-WebRequest -Uri "https://www.python.org/ftp/python/2.7.17/python-2.7.17.msi" -OutFile "$env:tempfolder\$env:pythonfile" *>$null
-	Write-Output "    2. WinDBG"
+	Write-Output "    1. Python 2.7.18"
+	Invoke-WebRequest -Uri "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi" -OutFile "$env:tempfolder\$env:pythonfile" *>$null
+	Write-Output "    2. Classic WinDBG"
 	Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409" -OutFile "$env:tempfolder\$env:windbgfile" *>$null
 	Write-Output "    3. PyKD"
 	Invoke-WebRequest -Uri "https://github.com/corelan/windbglib/raw/master/pykd/pykd.zip" -OutFile "$env:tempfolder\$env:pykdfile" *>$null
@@ -101,6 +101,10 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
 	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !py mona config -set workingfolder c:\logs\%p; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
 	
+	Write-Output "[+] Installing WinDBGX"
+	Write-Output "    Press 'Y' when asked to agree to all the source agreements terms"
+	winget install Microsoft.WinDbg --silent
+
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
 	Write-Output "[+] All set"
@@ -108,6 +112,8 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "==> Please check the WinDBG log window and confirm that:"
 	Write-Output "    - the !peb command didn't produce an error message"
 	Write-Output "    - the !py mona command resulted in producing a list of available mona commands"
+
+	
 	
 }
 else
