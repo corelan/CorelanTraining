@@ -110,8 +110,10 @@ if (Test-Path $env:tempfolder -PathType Container)
 	
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
+	Write-Output ""
 	Write-Output "[+] All set"
 	Write-Output ""
+	Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
 
 	
 	
