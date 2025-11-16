@@ -103,15 +103,15 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
 
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
+	Write-Output "    ==> Please check the WinDBG log window and confirm that:"
+	Write-Output "        - the !peb command didn't produce an error message"
+	Write-Output "        - the !py mona command resulted in producing a list of available mona commands"
 	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.pyd; !py mona config -set workingfolder c:\logs\%p; !peb; !py mona" -o "c:\windows\system32\calc.exe"'
 	
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
 	Write-Output "[+] All set"
 	Write-Output ""
-	Write-Output "==> Please check the WinDBG log window and confirm that:"
-	Write-Output "    - the !peb command didn't produce an error message"
-	Write-Output "    - the !py mona command resulted in producing a list of available mona commands"
 
 	
 	
