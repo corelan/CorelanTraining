@@ -11,7 +11,7 @@ Usage
 3. Verify/confirm that you have a working internet connection
 4. run `powershell ./CorelanVMInstall.ps1`
 5. If all goes well, the script will:
-  - download installers for Python 2.7.17, WinDBG, PyKD, mona.py, windbglib.py and Visual Studio 2017 Desktop Express
+  - download installers for Python 2.7.18, WinDBG, WinDBGX, PyKD, mona.py, windbglib.py and Visual Studio 2017 Desktop Express
   - install the required prerequisites and applications
   - set up the PATH environment variable
   - create a system environment variable `_NT_SYMBOL_PATH`
