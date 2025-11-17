@@ -94,12 +94,12 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Start-Process "$env:tempfolder\vcredist_x86.exe" -Wait -ArgumentList "/q"
 	if (Test-Path "C:\Program Files (x86)\Common Files\microsoft shared\VC\msdia90.dll" -PathType Leaf)
 	{
-	Write-Output "    3. Register msdia90.dll"
-	Start-Process regsvr32 -Wait -ArgumentList '"C:\Program Files (x86)\Common Files\microsoft shared\VC\msdia90.dll" /s'
+		Write-Output "    3. Register msdia90.dll"
+		Start-Process regsvr32 -Wait -ArgumentList '"C:\Program Files (x86)\Common Files\microsoft shared\VC\msdia90.dll" /s'
 	}
 	else
 	{
-	Write-Output "    3. *** Error registering msdia90.dll, file does not exist ***"
+		Write-Output "    3. *** Error registering msdia90.dll, file does not exist ***"
 	}	
 	Write-Output "    4. WinDBG"
 	Write-Output "       Hold on, this may take a while..."
