@@ -10,14 +10,16 @@
 #
 
 $env:tempfolder = "c:\corelantemp"
-$env:pythonfile = "python-2.7.17.msi"
+$env:pythonfile = "python-2.7.18.msi"
 $env:windbgfile = "winsdksetup.exe"
 $env:vscommunityfile = "vs_WDExpress.exe"
 $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdfile = "pykd.zip"
+$env:immunitypycommandsfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger\PyCommands"
 
 # helper functions
+
 
 function pause()
 {
@@ -27,10 +29,22 @@ function pause()
 }
 
 
-
 # main stuff
+$currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) 
+{
+    Write-Output "*****************************************"
+	Write-Output "This script must be run as Administrator."
+    Write-Output "*****************************************"
+    exit 1
+}
+else
+{
+	Write-Output "Administrator privilges detected."
+}
 
-Write-Host "Make sure you are running as admin, and that you have an active internet connection before proceeding!"
+Write-Host "*** -->> Make sure you have an active internet connection before proceeding! <<-- ***"
 pause
 
 
@@ -94,10 +108,17 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "    5. WinDBGX"
 	winget install Microsoft.WinDbg --silent --accept-package-agreements
 
-	Write-Output "    6. PyKD, windbglib & mona"
+	Write-Output "    6. PyKD, windbglib and mona"
+	Write-Output "       a. Installing mona.py in WinDBG"
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\pykd.pyd" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\"
+	# if Immunity Debugger was already installed, copy mona.py into the PyCommands folder
+    if (Test-Path $env:immunitypycommandsfolder -PathType Container)
+    {
+        Write-Output "       b. Installing mona.py in Immunity Debugger"
+        Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination $env:immunitypycommandsfolder -Force
+    } 
 	
 	Write-Output "    7. Visual Studio 2017 Desktop Express - manual install"
 	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
@@ -114,12 +135,8 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "[+] All set"
 	Write-Output ""
 	Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
-
-	
-	
 }
 else
 { 
 	Write-Output "*** Oops, folder '$env:tempfolder' does not exist"
 }
-
