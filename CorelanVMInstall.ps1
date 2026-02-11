@@ -16,7 +16,8 @@ $env:vscommunityfile = "vs_WDExpress.exe"
 $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdfile = "pykd.zip"
-$env:immunitypycommandsfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger\PyCommands"
+$env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
+$env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
 
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
@@ -138,12 +139,26 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\pykd.pyd" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\"
+	
 	# if Immunity Debugger was already installed, copy mona.py into the PyCommands folder
-    if (Test-Path $env:immunitypycommandsfolder -PathType Container)
-    {
-        Write-Output "       b. Installing mona.py in Immunity Debugger"
-        Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination $env:immunitypycommandsfolder -Force
-    } 
+	if (Test-Path $env:immunitypycommandsfolder -PathType Container)
+	{
+		Write-Output "       b. Installing mona.py in Immunity Debugger"
+		Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination $env:immunitypycommandsfolder -Force
+
+		# Check for mona.ini
+		$monaIniPath = Join-Path $env:immunityprogramfolder "mona.ini"
+
+		if (-not (Test-Path $monaIniPath -PathType Leaf))
+		{
+			Write-Output "       c. Creating mona.ini"
+			"workingfolder=c:\logs\%p" | Out-File -FilePath $monaIniPath -Encoding ASCII
+		}
+		else
+		{
+			Write-Output "       c. mona.ini already exists"
+		}
+	}
 	
 	Write-Output "    7. Visual Studio 2017 Desktop Express - manual install"
 	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
