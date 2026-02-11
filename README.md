@@ -1,4 +1,4 @@
-This repository contains a Powershell script to assist with the setup of Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
+This repository contains a Powershell script to assist with the setup of Windows 11/10 Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
 
 For info on classes, see https://www.corelan-training.com/
 
@@ -15,6 +15,7 @@ Usage
   - install the required prerequisites and applications
   - set up the PATH environment variable
   - create a system environment variable `_NT_SYMBOL_PATH`
+  - create a Command Prompt shortcut on the Desktop
 
 
 FAQ 

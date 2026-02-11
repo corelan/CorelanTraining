@@ -6,7 +6,7 @@
 # www.corelan-certified.com
 #
 # PowerShell script to prepare a Windows 11/10 machine for use in the  
-# Corelan Heap Exploit Development Masterclass
+# Corelan Stack & Heap Exploit Development classes
 #
 
 $env:tempfolder = "c:\corelantemp"
@@ -17,6 +17,12 @@ $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdfile = "pykd.zip"
 $env:immunitypycommandsfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger\PyCommands"
+
+$cmdPath = "$env:WINDIR\System32\cmd.exe"
+$desktopPath = [Environment]::GetFolderPath("Desktop")
+$shortcutPath = Join-Path $desktopPath "Corelan CMD Prompt.lnk"
+$cmdArguments = '/K "cd /d ""C:\Program Files (x86)\Windows Kits\10\Debuggers\x86"""'
+
 
 # helper functions
 
@@ -50,6 +56,25 @@ pause
 
 Write-Output "[+] Creating temp folder $env:tempfolder"
 New-Item -Path "c:\" -Name "corelantemp" -ItemType "directory" *>$null
+
+Write-Output "[+] Creating shortcut to cmd.exe on desktop (set to 'Run As Administrator')."
+
+# Create shortcut
+$WshShell = New-Object -ComObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut($shortcutPath)
+
+$shortcut.TargetPath = $cmdPath
+$shortcut.Arguments = $cmdArguments
+$shortcut.WorkingDirectory = "$env:WINDIR\System32"
+$shortcut.WindowStyle = 1
+$shortcut.IconLocation = "$cmdPath,0"
+$shortcut.Save()
+
+# --- Enable "Run as Administrator" flag ---
+$bytes = [System.IO.File]::ReadAllBytes($shortcutPath)
+$bytes[0x15] = $bytes[0x15] -bor 0x20
+[System.IO.File]::WriteAllBytes($shortcutPath, $bytes)
+
 
 # Since all the URLs used for downloading packages uses TLS 1.2 so we need to make sure TLS 1.2 is being used while files been requested otherwise we get SSL error
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
