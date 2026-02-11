@@ -48,7 +48,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 else
 {
-	Write-Output "Administrator privilges detected."
+	Write-Output "Administrator privileges detected."
 }
 
 Write-Host "*** -->> Make sure you have an active internet connection before proceeding! <<-- ***"
