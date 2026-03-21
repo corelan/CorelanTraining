@@ -35,6 +35,8 @@ Solution:
 * Run `Set-ExecutionPolicy RemoteSigned` and press "Y" when prompted
 * Try running the powershell script again.
 
+If that doesn't work, try `Set-ExecutionPolicy RemoteSigned` instead
+
 
 
 ##  !peb produces 'error 3 InitTypeRead' on Windows 10 1903/1909
