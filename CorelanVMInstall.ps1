@@ -4,9 +4,12 @@
 # www.corelan-consulting.com
 # www.corelan-training.com
 # www.corelan-certified.com
+# www.corelan.be
+#
 #
 # PowerShell script to prepare a Windows 11/10 machine for use in the  
 # Corelan Stack & Heap Exploit Development classes
+#
 #
 
 $env:tempfolder = "c:\corelantemp"
