@@ -35,7 +35,7 @@ Solution:
 * Run `Set-ExecutionPolicy RemoteSigned` and press "Y" when prompted
 * Try running the powershell script again.
 
-If that doesn't work, try `Set-ExecutionPolicy RemoteSigned` instead
+If that doesn't work, try `Set-ExecutionPolicy Unrestricted` instead
 
 
 
