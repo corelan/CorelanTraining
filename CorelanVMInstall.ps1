@@ -27,39 +27,252 @@ $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktopPath "Corelan CMD Prompt.lnk"
 $cmdArguments = '/K "cd /d ""C:\Program Files (x86)\Windows Kits\10\Debuggers\x86"""'
 
-
-# helper functions
-
-
-function pause()
+function Confirm-Continue
 {
-	Write-Host -NoNewLine 'Press any key to continue...';
-	$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
-	Write-Host ""
+    param(
+        [string]$Message = "Ready to continue?"
+    )
+
+    while ($true)
+    {
+        $response = Read-Host "$Message (Y/N)"
+
+        switch ($response.ToLower())
+        {
+            "y" { return }
+            "yes" { return }
+            "n" 
+            { 
+                Write-Output "Aborted by user."
+                exit 1 
+            }
+            "no"
+            {
+                Write-Output "Aborted by user."
+                exit 1
+            }
+            default
+            {
+                Write-Output "Please enter Y or N."
+            }
+        }
+    }
+}
+
+function Ensure-Folder($path)
+{
+    if (-not (Test-Path $path -PathType Container))
+    {
+        New-Item -Path $path -ItemType Directory -Force *>$null
+    }
+}
+
+function Ensure-Admin
+{
+    Write-Output "[+] Testing if we have admin privileges"
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
+
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
+    {
+        Write-Output "**********************************************"
+        Write-Output "!! This script must be run as Administrator !!"
+        Write-Output "**********************************************"
+        exit 1
+    }
+    else
+    {
+        Write-Output "    OK: Administrator privileges detected."
+    }
+}
+
+function Download-File($uri, $outFile, $label)
+{
+    Write-Output "    $label"
+    Invoke-WebRequest -Uri $uri -OutFile $outFile -UseBasicParsing *>$null
+}
+
+function Ensure-Winget
+{
+    param(
+        [string]$TempFolder
+    )
+
+    Write-Output "[+] Checking for winget"
+
+    if (Get-Command winget -ErrorAction SilentlyContinue)
+    {
+        Write-Output "    winget found"
+        return
+    }
+
+    Write-Output "*** winget was not found on this system."
+    Write-Output "***"
+    Write-Output "*** This script can continue without installing it,"
+    Write-Output "*** but features that rely on winget will not work."
+    Write-Output ""
+
+    while ($true)
+    {
+        $response = Read-Host "Do you want to install winget now? (Y/N)"
+
+        switch ($response.ToLower())
+        {
+            "y" { break }
+            "yes" { break }
+            "n"
+            {
+                Write-Output "Aborted by user."
+                exit 1
+            }
+            "no"
+            {
+                Write-Output "Aborted by user."
+                exit 1
+            }
+            default
+            {
+                Write-Output "Please enter Y or N."
+            }
+        }
+    }
+
+    Ensure-Folder $TempFolder
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    $appInstallerFile = Join-Path $TempFolder "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+    $appInstallerUrl  = "https://aka.ms/getwinget"
+
+    try
+    {
+        Write-Output "    Downloading App Installer package"
+
+        if (Test-Path $appInstallerFile)
+        {
+            Remove-Item $appInstallerFile -Force
+        }
+
+        Invoke-WebRequest -Uri $appInstallerUrl -OutFile $appInstallerFile -UseBasicParsing *>$null
+    }
+    catch
+    {
+        Write-Output "*** Failed to download App Installer package"
+        Write-Output "*** Please install winget manually and run this script again."
+        exit 1
+    }
+
+    try
+    {
+        Write-Output "    Installing App Installer / winget"
+        Add-AppxPackage -Path $appInstallerFile
+    }
+    catch
+    {
+        Write-Output "*** Failed to install App Installer package"
+        Write-Output "*** Please install winget manually and run this script again."
+        exit 1
+    }
+
+    Start-Sleep -Seconds 5
+
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath    = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path    = "$machinePath;$userPath"
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue))
+    {
+        Write-Output "*** winget still not available after installation"
+        Write-Output "*** A reboot or sign-out/sign-in may be required."
+        exit 1
+    }
+
+    Write-Output "    winget installed successfully"
 }
 
 
-# main stuff
-$currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) 
+
+function Test-InternetConnectivity
 {
-    Write-Output "*****************************************"
-	Write-Output "This script must be run as Administrator."
-    Write-Output "*****************************************"
-    exit 1
+    Write-Output "[+] Checking internet connectivity"
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    $testUris = @(
+        "https://www.python.org/",
+        "https://pypi.org/",
+        "https://github.com/",
+        "https://aka.ms/"
+    )
+
+    foreach ($uri in $testUris)
+    {
+        try
+        {
+            Invoke-WebRequest -Uri $uri -Method Head -UseBasicParsing -TimeoutSec 20 *>$null
+            Write-Output "    OK   $uri"
+        }
+        catch
+        {
+            Write-Output "*** Unable to reach $uri"
+            Write-Output "*** Please verify internet connectivity and try again."
+            exit 1
+        }
+    }
 }
-else
+
+
+function Test-PendingWindowsUpdates
 {
-	Write-Output "Administrator privileges detected."
+    Write-Output "[+] Checking for pending Windows Updates"
+
+    try
+    {
+        $updateSession = New-Object -ComObject Microsoft.Update.Session
+        $updateSearcher = $updateSession.CreateUpdateSearcher()
+
+        # Search for updates that are not installed
+        $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software'")
+
+        if ($searchResult.Updates.Count -gt 0)
+        {
+            Write-Output "    There are pending Windows Updates:"
+            
+            for ($i = 0; $i -lt $searchResult.Updates.Count; $i++)
+            {
+                $update = $searchResult.Updates.Item($i)
+                Write-Output "      - $($update.Title)"
+            }
+
+            return $true
+        }
+        else
+        {
+            Write-Output "    No pending updates found"
+            return $false
+        }
+    }
+    catch
+    {
+        Write-Output "*** Failed to query Windows Update"
+        return $true   # fail-safe: assume updates are pending
+    }
 }
+
+
+Ensure-Admin
 
 Write-Host "*** -->> Make sure you have an active internet connection before proceeding! <<-- ***"
-pause
+Confirm-Continue
+
+Test-InternetConnectivity
 
 
 Write-Output "[+] Creating temp folder $env:tempfolder"
 New-Item -Path "c:\" -Name "corelantemp" -ItemType "directory" *>$null
+
+Ensure-Winget -TempFolder $env:tempfolder
+
 
 Write-Output "[+] Creating shortcut to cmd.exe on desktop (set to 'Run As Administrator')."
 
@@ -135,9 +348,12 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Start-Process "$env:tempfolder\$env:windbgfile" -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q'
 
 	Write-Output "    5. WinDBGX"
-	winget install Microsoft.WinDbg --silent --accept-package-agreements
+	winget install --id Microsoft.WinDbg -e --source winget --silent --accept-package-agreements --accept-source-agreements
 
-	Write-Output "    6. PyKD, windbglib and mona"
+	Write-Output "    6. Visual Studio Code"
+	winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
+
+	Write-Output "    7. PyKD, windbglib and mona"
 	Write-Output "       a. Installing mona.py in WinDBG"
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
@@ -162,8 +378,11 @@ if (Test-Path $env:tempfolder -PathType Container)
 			Write-Output "       c. mona.ini already exists"
 		}
 	}
+
+	Write-Output "    8. 7Zip"
+	winget install --id 7zip.7zip -e --source winget --silent --accept-package-agreements --accept-source-agreements
 	
-	Write-Output "    7. Visual Studio 2017 Desktop Express - manual install"
+	Write-Output "    9. Visual Studio 2017 Desktop Express - manual install"
 	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
 
 	Write-Output "[+] Launching WinDBG to check if everything is ok"
