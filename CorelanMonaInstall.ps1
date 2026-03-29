@@ -515,10 +515,24 @@ function Install-PyKD32
 
 function Install-VCRuntime2010
 {
-    Write-Output "[+] Installing Microsoft Visual C++ 2010 SP1 Redistributable (x86 and x64)"
+    Write-Output "[+] Installing Microsoft Visual C++ 2010 SP1 Redistributables (x86 and x64)"
 
-    Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:vcredist2010x86file) -Arguments "/quiet /norestart" -Description "Installing VC++ 2010 SP1 x86"
-    Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:vcredist2010x64file) -Arguments "/quiet /norestart" -Description "Installing VC++ 2010 SP1 x64"
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue))
+    {
+        Write-Output "*** winget not available - cannot install VC++ runtime automatically"
+        Write-Output "*** Please install VC++ 2010 SP1 (x86 + x64) manually"
+        exit 1
+    }
+
+    # x86
+    Run-ProcessChecked -FilePath "winget" `
+        -Arguments "install --id Microsoft.VC++2010Redist-x86 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
+        -Description "Installing VC++ 2010 SP1 x86"
+
+    # x64
+    Run-ProcessChecked -FilePath "winget" `
+        -Arguments "install --id Microsoft.VC++2010Redist-x64 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
+        -Description "Installing VC++ 2010 SP1 x64"
 }
 
 function Install-PyKD64
@@ -584,8 +598,6 @@ Validate-WingetPythonSources -StageDescription "before Python install"
 Write-Output "[+] Downloading installers"
 Download-File -Uri $python32Url      -OutFile (Join-Path $env:tempfolder $env:python32installer)     -Label "1. Python 3.9.13 32-bit"
 Download-File -Uri $python64Url      -OutFile (Join-Path $env:tempfolder $env:python64installer)     -Label "2. Python 3.9.13 64-bit"
-Download-File -Uri $vcredist2010x86Url -OutFile (Join-Path $env:tempfolder $env:vcredist2010x86file) -Label "3. VC++ 2010 SP1 x86"
-Download-File -Uri $vcredist2010x64Url -OutFile (Join-Path $env:tempfolder $env:vcredist2010x64file) -Label "4. VC++ 2010 SP1 x64"
 
 Install-Python39
 Install-VCRuntime2010
