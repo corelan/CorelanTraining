@@ -625,10 +625,7 @@ Ensure-Folder $userExtensions
 
 Ensure-Winget -TempFolder $env:tempfolder
 
-
 Remove-ExistingPyKD
-
-
 
 Validate-WingetPythonSources -StageDescription "before Python install"
 
