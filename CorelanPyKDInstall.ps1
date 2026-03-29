@@ -18,6 +18,8 @@ $env:python64installer         = "python-3.9.13-amd64.exe"
 
 $python32Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
 $python64Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
+$pykdExtX86Url                 = "https://github.com/apl3b/pykd-ext/releases/download/2.0.0.24/x86.zip"
+$pykdExtX64Url                 = "https://github.com/apl3b/pykd-ext/releases/download/2.0.0.24/x64.zip"
 
 $classicDbgBase                = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt64                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
@@ -281,14 +283,17 @@ function Remove-FileIfExists($path)
 
 function Remove-ExistingPyKD
 {
-    Write-Output "[+] Removing existing pykd.pyd files"
+    Write-Output "[+] Removing existing PyKD files"
 
     $paths = @(
         (Join-Path $classicDbgBase "x86\winext\pykd.pyd"),
         (Join-Path $classicDbgBase "x64\winext\pykd.pyd"),
         (Join-Path $engineExt64 "pykd.pyd"),
         (Join-Path $engineExt32 "pykd.pyd"),
-        (Join-Path $userExtensions "pykd.pyd")
+        (Join-Path $engineExt64 "pykd.dll"),
+        (Join-Path $engineExt32 "pykd.dll"),
+        (Join-Path $userExtensions "pykd.pyd"),
+        (Join-Path $userExtensions "pykd.dll")
     )
 
     foreach ($path in $paths)
@@ -474,31 +479,12 @@ function Install-PyKD32
     Ensure-Folder $engineExt32
     Ensure-Folder $vcShared32
 
-    $pykdPyd32 = Find-PyKDPyd -SitePackagesPath $python32SitePackages
-    if (-not $pykdPyd32)
-    {
-        Write-Output "*** Unable to locate pykd.pyd for Python 3.9 32-bit"
-        exit 1
-    }
-
-    if (-not (Test-Path $python32Dll -PathType Leaf))
-    {
-        Write-Output "*** Unable to locate python39.dll for Python 3.9 32-bit"
-        exit 1
-    }
-
     $msdia140Source = Find-Msdia140 -SearchRoot $python32Root
     if (-not $msdia140Source)
     {
         Write-Output "*** Unable to locate msdia140.dll for Python 3.9 32-bit"
         exit 1
     }
-
-    Write-Output "    Copying pykd.pyd to $engineExt32"
-    Copy-Item -Path $pykdPyd32 -Destination (Join-Path $engineExt32 "pykd.pyd") -Force
-
-    Write-Output "    Copying python39.dll to $engineExt32"
-    Copy-Item -Path $python32Dll -Destination (Join-Path $engineExt32 "python39.dll") -Force
 
     Write-Output "    Copying msdia140.dll to $vcShared32"
     Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force
@@ -509,15 +495,27 @@ function Install-PyKD32
 
 function Install-VCRuntime2010
 {
-    Write-Output "[+] Installing Microsoft Visual C++ 2010 SP1 Redistributables (x86 and x64)"
+    Write-Host "[*] Installing VC++ 2010 SP1 x86..."
 
-    Run-ProcessChecked -FilePath "winget" `
-        -Arguments "install --id Microsoft.VCRedist.2010.x86 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
-        -Description "Installing VC++ 2010 SP1 x86"
+    try {
+        $proc = Start-Process -FilePath "$env:tempfolder\vcredist_x86.exe" -ArgumentList "/quiet /norestart" -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+            Write-Warning "VC++ 2010 x86 installer returned exit code $($proc.ExitCode). Continuing anyway..."
+        }
+    } catch {
+        Write-Warning "VC++ 2010 x86 installation failed. Continuing anyway..."
+    }
 
-    Run-ProcessChecked -FilePath "winget" `
-        -Arguments "install --id Microsoft.VCRedist.2010.x64 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
-        -Description "Installing VC++ 2010 SP1 x64"
+    Write-Host "[*] Installing VC++ 2010 SP1 x64..."
+
+    try {
+        $proc = Start-Process -FilePath "$env:tempfolder\vcredist_x64.exe" -ArgumentList "/quiet /norestart" -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+            Write-Warning "VC++ 2010 x64 installer returned exit code $($proc.ExitCode). Continuing anyway..."
+        }
+    } catch {
+        Write-Warning "VC++ 2010 x64 installation failed. Continuing anyway..."
+    }
 }
 
 function Install-PyKD64
@@ -528,30 +526,84 @@ function Install-PyKD64
 
     Ensure-Folder $engineExt64
 
-    $pykdPyd64 = Find-PyKDPyd -SitePackagesPath $python64SitePackages
-    if (-not $pykdPyd64)
-    {
-        Write-Output "*** Unable to locate pykd.pyd for Python 3.9 64-bit"
-        exit 1
-    }
-
-    if (-not (Test-Path $python64Dll -PathType Leaf))
-    {
-        Write-Output "*** Unable to locate python39.dll for Python 3.9 64-bit"
-        exit 1
-    }
-
-    Write-Output "    Copying pykd.pyd to $engineExt64"
-    Copy-Item -Path $pykdPyd64 -Destination (Join-Path $engineExt64 "pykd.pyd") -Force
-
-    Write-Output "    Copying python39.dll to $engineExt64"
-    Copy-Item -Path $python64Dll -Destination (Join-Path $engineExt64 "python39.dll") -Force
-
     Write-Output "    Registering msdia100.dll (continue if missing)"
     Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
 
     Write-Output "    Registering msdia120.dll"
     Register-DllSilent -DllPath $msdia120_32 -Bitness x86
+}
+
+
+function Install-Python27PyKD
+{
+    $python27Root    = "C:\Python27"
+    $python27Scripts = Join-Path $python27Root "Scripts"
+    $pipExe          = Join-Path $python27Scripts "pip.exe"
+
+    Write-Output "[+] Checking for Python 2.7.18 at $python27Root"
+
+    if (-not (Test-Path $python27Root -PathType Container))
+    {
+        Write-Output "    Python 2.7.18 not found at $python27Root, skipping"
+        return
+    }
+
+    if (-not (Test-Path $pipExe -PathType Leaf))
+    {
+        Write-Output "*** Python 2.7 was found at $python27Root, but $pipExe does not exist"
+        exit 1
+    }
+
+    Run-ProcessChecked -FilePath $pipExe -Arguments "install pykd" -Description "Installing PyKD with pip for Python 2.7"
+}
+
+function Install-PyKDExtensions
+{
+    Write-Output "[+] Installing PyKD-Ext into WinDBG EngineExtensions folders"
+
+    $pykdExtX86Zip      = Join-Path $env:tempfolder "pykd-ext-x86.zip"
+    $pykdExtX64Zip      = Join-Path $env:tempfolder "pykd-ext-x64.zip"
+    $pykdExtX86Extract  = Join-Path $env:tempfolder "pykd-ext-x86"
+    $pykdExtX64Extract  = Join-Path $env:tempfolder "pykd-ext-x64"
+
+    Download-File -Uri $pykdExtX86Url -OutFile $pykdExtX86Zip -Label "3. PyKD-Ext x86"
+    Download-File -Uri $pykdExtX64Url -OutFile $pykdExtX64Zip -Label "4. PyKD-Ext x64"
+
+    Remove-Item -Path $pykdExtX86Extract -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $pykdExtX64Extract -Recurse -Force -ErrorAction SilentlyContinue
+
+    Ensure-Folder $pykdExtX86Extract
+    Ensure-Folder $pykdExtX64Extract
+
+    Write-Output "    Extracting PyKD-Ext x86"
+    Expand-Archive -Path $pykdExtX86Zip -DestinationPath $pykdExtX86Extract -Force
+
+    Write-Output "    Extracting PyKD-Ext x64"
+    Expand-Archive -Path $pykdExtX64Zip -DestinationPath $pykdExtX64Extract -Force
+
+    $pykdDllX86 = Join-Path $pykdExtX86Extract "Release\pykd.dll"
+    $pykdDllX64 = Join-Path $pykdExtX64Extract "Release\pykd.dll"
+
+    if (-not (Test-Path $pykdDllX86 -PathType Leaf))
+    {
+        Write-Output "*** Unable to locate x86 Release\pykd.dll in PyKD-Ext archive"
+        exit 1
+    }
+
+    if (-not (Test-Path $pykdDllX64 -PathType Leaf))
+    {
+        Write-Output "*** Unable to locate x64 Release\pykd.dll in PyKD-Ext archive"
+        exit 1
+    }
+
+    Ensure-Folder $engineExt32
+    Ensure-Folder $engineExt64
+
+    Write-Output "    Copying x86 pykd.dll to $engineExt32"
+    Copy-Item -Path $pykdDllX86 -Destination (Join-Path $engineExt32 "pykd.dll") -Force
+
+    Write-Output "    Copying x64 pykd.dll to $engineExt64"
+    Copy-Item -Path $pykdDllX64 -Destination (Join-Path $engineExt64 "pykd.dll") -Force
 }
 
 
@@ -592,6 +644,8 @@ Validate-WingetPythonSources -StageDescription "after Python install"
 Upgrade-Pip
 Install-PyKD32
 Install-PyKD64
+Install-Python27PyKD
+Install-PyKDExtensions
 
 Write-Output "[+] Removing temporary folder again"
 Remove-Item -Path $env:tempfolder -Recurse -Force -ErrorAction SilentlyContinue

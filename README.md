@@ -44,9 +44,8 @@ If that doesn't work, try `Set-ExecutionPolicy Unrestricted` instead
 
 
 
+# CorelanPyKDInstall.ps1
 
-# CorelanMonaInstall.ps1
-
-This script will instally Python3.9 and a PyKD version that is compatible with Python3.
-Please keep in mind that it will break mona.py installations that are based on PyKD 0.2.0.x and Python2
+This script will instally Python3.9 and a PyKD + pykd-ext version that is compatible with Python3.
+Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
 Do not use this script unless you know what you're doing ;-)
