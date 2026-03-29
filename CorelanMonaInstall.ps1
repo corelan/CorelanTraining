@@ -39,12 +39,6 @@ $msdia140Target                = Join-Path $vcShared32 "msdia140.dll"
 $msdia100_64                   = "C:\Program Files\Common Files\microsoft shared\VC\msdia100.dll"
 $msdia120_32                   = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\msdia120.dll"
 
-$env:vcredist2010x86file         = "vcredist_2010_x86.exe"
-$env:vcredist2010x64file         = "vcredist_2010_x64.exe"
-
-$vcredist2010x86Url              = "https://download.microsoft.com/download/1/6/B/16B06F19-6D5A-4A72-B4E1-61E4A0CCAD08/vcredist_x86.exe"
-$vcredist2010x64Url              = "https://download.microsoft.com/download/1/6/B/16B06F19-6D5A-4A72-B4E1-61E4A0CCAD08/vcredist_x64.exe"
-
 $regsvr32_64                   = "$env:WINDIR\System32\regsvr32.exe"
 $regsvr32_32                   = "$env:WINDIR\SysWOW64\regsvr32.exe"
 
@@ -517,21 +511,12 @@ function Install-VCRuntime2010
 {
     Write-Output "[+] Installing Microsoft Visual C++ 2010 SP1 Redistributables (x86 and x64)"
 
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue))
-    {
-        Write-Output "*** winget not available - cannot install VC++ runtime automatically"
-        Write-Output "*** Please install VC++ 2010 SP1 (x86 + x64) manually"
-        exit 1
-    }
-
-    # x86
     Run-ProcessChecked -FilePath "winget" `
-        -Arguments "install --id Microsoft.VC++2010Redist-x86 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
+        -Arguments "install --id Microsoft.VCRedist.2010.x86 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
         -Description "Installing VC++ 2010 SP1 x86"
 
-    # x64
     Run-ProcessChecked -FilePath "winget" `
-        -Arguments "install --id Microsoft.VC++2010Redist-x64 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
+        -Arguments "install --id Microsoft.VCRedist.2010.x64 -e --source winget --silent --accept-package-agreements --accept-source-agreements" `
         -Description "Installing VC++ 2010 SP1 x64"
 }
 
@@ -601,12 +586,6 @@ Download-File -Uri $python64Url      -OutFile (Join-Path $env:tempfolder $env:py
 
 Install-Python39
 Install-VCRuntime2010
-
-Validate-WingetPythonSources -StageDescription "after Python install"
-
-Upgrade-Pip
-Install-PyKD32
-Install-PyKD64
 
 Validate-WingetPythonSources -StageDescription "after Python install"
 
