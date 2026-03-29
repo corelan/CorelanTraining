@@ -39,6 +39,12 @@ $msdia140Target                = Join-Path $vcShared32 "msdia140.dll"
 $msdia100_64                   = "C:\Program Files\Common Files\microsoft shared\VC\msdia100.dll"
 $msdia120_32                   = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\msdia120.dll"
 
+$env:vcredist2010x86file         = "vcredist_2010_x86.exe"
+$env:vcredist2010x64file         = "vcredist_2010_x64.exe"
+
+$vcredist2010x86Url              = "https://download.microsoft.com/download/1/6/B/16B06F19-6D5A-4A72-B4E1-61E4A0CCAD08/vcredist_x86.exe"
+$vcredist2010x64Url              = "https://download.microsoft.com/download/1/6/B/16B06F19-6D5A-4A72-B4E1-61E4A0CCAD08/vcredist_x64.exe"
+
 $regsvr32_64                   = "$env:WINDIR\System32\regsvr32.exe"
 $regsvr32_32                   = "$env:WINDIR\SysWOW64\regsvr32.exe"
 
@@ -102,10 +108,44 @@ function Ensure-Admin
     }
 }
 
-function Download-File($uri, $outFile, $label)
+function Download-File
 {
-    Write-Output "    $label"
-    Invoke-WebRequest -Uri $uri -OutFile $outFile -UseBasicParsing *>$null
+    param(
+        [string]$Uri,
+        [string]$OutFile,
+        [string]$Label
+    )
+
+    Write-Output "    $Label"
+
+    if (Test-Path $OutFile)
+    {
+        Remove-Item $OutFile -Force
+    }
+
+    # Try curl first
+    $curl = "$env:SystemRoot\System32\curl.exe"
+
+    if (Test-Path $curl)
+    {
+        & $curl -L --fail -o $OutFile $Uri
+        if ($LASTEXITCODE -eq 0)
+        {
+            return
+        }
+    }
+
+    # Fallback to BITS
+    try
+    {
+        Start-BitsTransfer -Source $Uri -Destination $OutFile
+        return
+    }
+    catch
+    {
+        Write-Output "*** Download failed with curl and BITS"
+        exit 1
+    }
 }
 
 function Ensure-Winget
@@ -233,44 +273,6 @@ function Test-InternetConnectivity
             Write-Output "*** Please verify internet connectivity and try again."
             exit 1
         }
-    }
-}
-
-
-function Test-PendingWindowsUpdates
-{
-    Write-Output "[+] Checking for pending Windows Updates"
-
-    try
-    {
-        $updateSession = New-Object -ComObject Microsoft.Update.Session
-        $updateSearcher = $updateSession.CreateUpdateSearcher()
-
-        # Search for updates that are not installed
-        $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software'")
-
-        if ($searchResult.Updates.Count -gt 0)
-        {
-            Write-Output "    There are pending Windows Updates:"
-            
-            for ($i = 0; $i -lt $searchResult.Updates.Count; $i++)
-            {
-                $update = $searchResult.Updates.Item($i)
-                Write-Output "      - $($update.Title)"
-            }
-
-            return $true
-        }
-        else
-        {
-            Write-Output "    No pending updates found"
-            return $false
-        }
-    }
-    catch
-    {
-        Write-Output "*** Failed to query Windows Update"
-        return $true   # fail-safe: assume updates are pending
     }
 }
 
@@ -511,6 +513,14 @@ function Install-PyKD32
     Register-DllSilent -DllPath $msdia140Target -Bitness x86
 }
 
+function Install-VCRuntime2010
+{
+    Write-Output "[+] Installing Microsoft Visual C++ 2010 SP1 Redistributable (x86 and x64)"
+
+    Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:vcredist2010x86file) -Arguments "/quiet /norestart" -Description "Installing VC++ 2010 SP1 x86"
+    Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:vcredist2010x64file) -Arguments "/quiet /norestart" -Description "Installing VC++ 2010 SP1 x64"
+}
+
 function Install-PyKD64
 {
     Write-Output "[+] Installing PyKD 64-bit"
@@ -567,13 +577,24 @@ Ensure-Winget -TempFolder $env:tempfolder
 
 Remove-ExistingPyKD
 
+
+
 Validate-WingetPythonSources -StageDescription "before Python install"
 
-Write-Output "[+] Downloading Python installers"
-Download-File -Uri $python32Url -OutFile (Join-Path $env:tempfolder $env:python32installer) -Label "1. Python 3.9.13 32-bit"
-Download-File -Uri $python64Url -OutFile (Join-Path $env:tempfolder $env:python64installer) -Label "2. Python 3.9.13 64-bit"
+Write-Output "[+] Downloading installers"
+Download-File -Uri $python32Url      -OutFile (Join-Path $env:tempfolder $env:python32installer)     -Label "1. Python 3.9.13 32-bit"
+Download-File -Uri $python64Url      -OutFile (Join-Path $env:tempfolder $env:python64installer)     -Label "2. Python 3.9.13 64-bit"
+Download-File -Uri $vcredist2010x86Url -OutFile (Join-Path $env:tempfolder $env:vcredist2010x86file) -Label "3. VC++ 2010 SP1 x86"
+Download-File -Uri $vcredist2010x64Url -OutFile (Join-Path $env:tempfolder $env:vcredist2010x64file) -Label "4. VC++ 2010 SP1 x64"
 
 Install-Python39
+Install-VCRuntime2010
+
+Validate-WingetPythonSources -StageDescription "after Python install"
+
+Upgrade-Pip
+Install-PyKD32
+Install-PyKD64
 
 Validate-WingetPythonSources -StageDescription "after Python install"
 

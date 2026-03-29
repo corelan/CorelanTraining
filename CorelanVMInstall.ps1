@@ -86,10 +86,44 @@ function Ensure-Admin
     }
 }
 
-function Download-File($uri, $outFile, $label)
+function Download-File
 {
-    Write-Output "    $label"
-    Invoke-WebRequest -Uri $uri -OutFile $outFile -UseBasicParsing *>$null
+    param(
+        [string]$Uri,
+        [string]$OutFile,
+        [string]$Label
+    )
+
+    Write-Output "    $Label"
+
+    if (Test-Path $OutFile)
+    {
+        Remove-Item $OutFile -Force
+    }
+
+    # Try curl first
+    $curl = "$env:SystemRoot\System32\curl.exe"
+
+    if (Test-Path $curl)
+    {
+        & $curl -L --fail -o $OutFile $Uri
+        if ($LASTEXITCODE -eq 0)
+        {
+            return
+        }
+    }
+
+    # Fallback to BITS
+    try
+    {
+        Start-BitsTransfer -Source $Uri -Destination $OutFile
+        return
+    }
+    catch
+    {
+        Write-Output "*** Download failed with curl and BITS"
+        exit 1
+    }
 }
 
 function Ensure-Winget
