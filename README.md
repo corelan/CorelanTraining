@@ -4,7 +4,7 @@ The first one - `CorelanVMInstall.ps` - will help you setup a Windows 11 Virtual
 
 For info on classes, see https://www.corelan-training.com/
 
-Prior to installing the scrip(s), it's highly recommended to update your Windows VM first.
+Prior to running the script(s), it's highly recommended to update your Windows VM first.
 Some parts of the script rely on `winget`, so make sure that is present on your system already.
 
 # CorelanVMInstall.ps1
