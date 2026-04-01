@@ -40,7 +40,7 @@ This allows you to run pykd/python scripts via `!py`.
 
 # FAQ 
 
-## Help, you scripts refuses to run.  For example:
+## Help, your script refuses to run.  For example:
 
 ```
 ./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
