@@ -1,6 +1,6 @@
 This repository contains a few Powershell scripts.
 
-The first one - `CorelanVMInstall.ps` - will help you setup a Windows 11 Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
+The first one - `CorelanVMInstall.ps1` - will help you setup a Windows 11 Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
 
 For info on classes, see https://www.corelan-training.com/
 
@@ -49,6 +49,9 @@ If that doesn't work, try `Set-ExecutionPolicy Unrestricted` instead
 
 # CorelanPyKDInstall.ps1
 
-This script will instally Python3.9 and a PyKD + pykd-ext version that is compatible with Python3.
+This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2
 Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
 Do not use this script unless you know what you're doing ;-)
+
+It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension.
+This allows you to run pykd/python scripts via `!py`.
