@@ -1,8 +1,11 @@
-This repository contains a Powershell script to assist with the setup of Windows 11/10 Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
+This repository contains a few Powershell scripts.
+
+The first one - `CorelanVMInstall.ps` - will help you setup a Windows 11 Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
 
 For info on classes, see https://www.corelan-training.com/
 
-Prior to installing the scrip(s), it might be a good idea to update your Windows VM first.
+Prior to installing the scrip(s), it's highly recommended to update your Windows VM first.
+Some parts of the script rely on `winget`, so make sure that is present on your system already.
 
 # CorelanVMInstall.ps1
 
