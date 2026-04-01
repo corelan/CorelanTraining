@@ -26,12 +26,21 @@ Usage
   - create an administrator Command Prompt shortcut on the Desktop
 
 
-FAQ 
-----
+# CorelanPyKDInstall.ps1
 
-## File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on this system
+This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2
+Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
+Do not use this script unless you know what you're doing ;-)
 
-My freshly installed Windows 11/10 doesn't allow me to run your powershell script. It produces the following error message:
+It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension.
+This allows you to run pykd/python scripts via `!py`.
+
+
+
+
+# FAQ 
+
+## Help, you scripts refuses to run.  For example:
 
 ```
 ./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
@@ -46,12 +55,3 @@ Solution:
 If that doesn't work, try `Set-ExecutionPolicy Unrestricted` instead
 
 
-
-# CorelanPyKDInstall.ps1
-
-This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2
-Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
-Do not use this script unless you know what you're doing ;-)
-
-It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension.
-This allows you to run pykd/python scripts via `!py`.
