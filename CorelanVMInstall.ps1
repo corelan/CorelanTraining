@@ -255,44 +255,7 @@ function Test-InternetConnectivity
     }
 }
 
-
-function Test-PendingWindowsUpdates
-{
-    Write-Output "[+] Checking for pending Windows Updates"
-
-    try
-    {
-        $updateSession = New-Object -ComObject Microsoft.Update.Session
-        $updateSearcher = $updateSession.CreateUpdateSearcher()
-
-        # Search for updates that are not installed
-        $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software'")
-
-        if ($searchResult.Updates.Count -gt 0)
-        {
-            Write-Output "    There are pending Windows Updates:"
-            
-            for ($i = 0; $i -lt $searchResult.Updates.Count; $i++)
-            {
-                $update = $searchResult.Updates.Item($i)
-                Write-Output "      - $($update.Title)"
-            }
-
-            return $true
-        }
-        else
-        {
-            Write-Output "    No pending updates found"
-            return $false
-        }
-    }
-    catch
-    {
-        Write-Output "*** Failed to query Windows Update"
-        return $true   # fail-safe: assume updates are pending
-    }
-}
-
+### MAIN ROUTINE ###
 
 Ensure-Admin
 
