@@ -1,11 +1,14 @@
-This repository contains a few Powershell scripts.
+This repository contains a few Powershell and Python scripts:
 
-The first one - `CorelanVMInstall.ps1` - will help you setup a Windows 11 Virtual Machines, in preparation for Corelan Windows Exploit Development Training.
+1. `CorelanVMInstall.ps1`: Will help you set up a Windows 11 VM, in preparation for [https://www.corelan-training.com](Corelan Windows Exploit Development) Training
+2. `CorelanPyKDInstall.ps1`: This script sets up your machine to run support Python3 / PyKD / PyKD-Ext in WinDBG(x), for both 32bit and 64bit 
+3. `CorelanWin7VMinstall.py`: This python script will install the necessary components to run PyKD/PyKD-Ext scripts on a Windows 7 VM.
 
-For info on classes, see https://www.corelan-training.com/
-
-Prior to running the script(s), it's highly recommended to update your Windows VM first.
+Prior to running one of the Powershell script(s) on Windows 11,  please update your Windows VM first.
 Some parts of the script rely on `winget`, so make sure that is present on your system already.
+
+Make sure to run scripts from an administrator prompt!!
+
 
 # CorelanVMInstall.ps1
 
@@ -32,15 +35,20 @@ This second script will install Python3.9 and a PyKD + pykd-ext version that is 
 Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
 Do not use this script unless you know what you're doing ;-)
 
-It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension.
+It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
 This allows you to run pykd/python scripts via `!py`.
+
+
+# CorelanWin7VMInstall.py
+
+This script kind of simulates what `CorelanPyKDInstall.ps1` does, but in Python and for Windows 7 specifically.
 
 
 
 
 # FAQ 
 
-## Help, your script refuses to run.  For example:
+## Help, the powershell script refuses to run.  For example:
 
 ```
 ./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
