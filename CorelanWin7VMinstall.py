@@ -60,6 +60,7 @@ PYKD_PYD_URL = "https://github.com/corelan/windbglib/raw/master/pykd/pykd.zip"
 VCREDIST_X86_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x86.exe"
 VCREDIST_X64_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x64.exe"
 DOTNET_URL = "https://go.microsoft.com/fwlink/?linkid=2088631"
+SYMBOLS_ZIP_URL = "https://www.corelan-training.com/downloads/win7symbols.zip"
 
 PYTHON2_INSTALLER = "python-2.7.18.msi"
 PYTHON32_INSTALLER = "python-3.8.10.exe"
@@ -73,6 +74,8 @@ PYKD_PYD_ZIP = "pykd.zip"
 VCREDIST_X86_FILE = "vcredist_x86.exe"
 VCREDIST_X64_FILE = "vcredist_x64.exe"
 DOTNET_FILE = "NPD48-x86-x64-AllOS-ENU.exe"
+SYMBOLS_ZIP_FILE = "win7symbols.zip"
+
 
 ENGINE_EXT_64 = os.path.join(os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"), "DBG", "EngineExtensions")
 ENGINE_EXT_32 = os.path.join(os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"), "DBG", "EngineExtensions32")
@@ -259,6 +262,50 @@ def check_internet():
         s.close()
         log("    OK   {0}:{1}".format(host, port))
 
+def install_local_symbols():
+    """
+    Downloaded win7symbols.zip contains a 'symbols' folder.
+    Extract its contents into C:\symbols
+    """
+
+    zip_path = os.path.join(TEMP_FOLDER, SYMBOLS_ZIP_FILE)
+    extract_path = os.path.join(TEMP_FOLDER, "symbols_extract")
+    target_root = r"C:\symbols"
+
+    log("    Preparing local symbol store at {0}".format(target_root))
+
+    # extract zip
+    extract_zip(zip_path, extract_path)
+
+    # locate "symbols" folder inside extracted content
+    symbols_folder = None
+    for root, dirs, files in os.walk(extract_path):
+        for d in dirs:
+            if d.lower() == "symbols":
+                symbols_folder = os.path.join(root, d)
+                break
+        if symbols_folder:
+            break
+
+    if not symbols_folder:
+        raise RuntimeError("Could not find 'symbols' folder inside win7symbols.zip")
+
+    # create C:\symbols
+    ensure_dir(target_root)
+
+    # copy contents (not the parent folder itself)
+    for item in os.listdir(symbols_folder):
+        src = os.path.join(symbols_folder, item)
+        dst = os.path.join(target_root, item)
+
+        if os.path.isdir(src):
+            if os.path.exists(dst):
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+
+    log("    Symbols installed into {0}".format(target_root))
 
 def install_python38():
     py32 = os.path.join(TEMP_FOLDER, PYTHON32_INSTALLER)
@@ -663,6 +710,7 @@ def download_everything():
     download_file(VCREDIST_X86_URL, os.path.join(TEMP_FOLDER, VCREDIST_X86_FILE), "10. VC++ 2010 SP1 x86")
     download_file(VCREDIST_X64_URL, os.path.join(TEMP_FOLDER, VCREDIST_X64_FILE), "11. VC++ 2010 SP1 x64")
     download_file(DOTNET_URL, os.path.join(TEMP_FOLDER, DOTNET_FILE), "12. .Net Framework 4.8")
+    download_file(SYMBOLS_ZIP_URL, os.path.join(TEMP_FOLDER, SYMBOLS_ZIP_FILE), "13. Win7 local symbols")
 
 
 def cleanup():
@@ -688,6 +736,7 @@ def main():
     ensure_dir(ENGINE_EXT_64)
 
     safe_step("Downloading installers and support files", download_everything)
+    safe_step("Installing local Win7 symbols into C:\\symbols", install_local_symbols)
     safe_step("Installing .Net Framework", install_dotnetframework_48)
     safe_step("Installing Python 2.7.18", install_python27)
     safe_step("Installing Python 3.8.10", install_python38)
@@ -695,6 +744,7 @@ def main():
     safe_step("Installing WinDBG Classic", install_windbg_classic)
 
     safe_step("Creating system environment variable _NT_SYMBOL_PATH", set_system_symbol_path)
+
 
     windbg_root = safe_step("Detecting WinDBG installation folder", detect_windbg_root)
 
