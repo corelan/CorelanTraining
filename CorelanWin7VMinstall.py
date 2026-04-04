@@ -15,7 +15,7 @@ Python 2 / Python 3 compatible installer helper for older Windows 7 SP1 VMs.
 IMPORTANT:
 - Run this script as Administrator.
 - This script uses only the Python standard library for downloads/extraction.
-- The script will *attempt* to install Python 3.8.10 directly, because that is the right fit for legacy Windows 7 SP1 environments.
+- The script will attempt to install Python 3.8.10 directly, because that is the right fit for legacy Windows 7 SP1 environments.
 - WinDBG Classic is installed through sdksetup.exe.
 """
 
@@ -26,8 +26,6 @@ import ctypes
 import shutil
 import zipfile
 import socket
-import time
-import tempfile
 import subprocess
 import traceback
 
@@ -58,6 +56,7 @@ MONA_URL = "https://github.com/corelan/mona/raw/master/mona.py"
 WINDBGLIB_URL = "https://github.com/corelan/windbglib/raw/master/windbglib.py"
 PYKD_EXT_X86_URL = "https://github.com/apl3b/pykd-ext/releases/download/2.0.0.24/x86.zip"
 PYKD_EXT_X64_URL = "https://github.com/apl3b/pykd-ext/releases/download/2.0.0.24/x64.zip"
+PYKD_PYD_URL = "https://github.com/corelan/windbglib/raw/master/pykd/pykd.zip"
 VCREDIST_X86_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x86.exe"
 VCREDIST_X64_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x64.exe"
 DOTNET_URL = "https://go.microsoft.com/fwlink/?linkid=2088631"
@@ -70,6 +69,7 @@ MONA_FILE = "mona.py"
 WINDBGLIB_FILE = "windbglib.py"
 PYKD_EXT_X86_ZIP = "pykd-ext-x86.zip"
 PYKD_EXT_X64_ZIP = "pykd-ext-x64.zip"
+PYKD_PYD_ZIP = "pykd.zip"
 VCREDIST_X86_FILE = "vcredist_x86.exe"
 VCREDIST_X64_FILE = "vcredist_x64.exe"
 DOTNET_FILE = "NPD48-x86-x64-AllOS-ENU.exe"
@@ -99,7 +99,7 @@ def abort(msg, code=1):
 
 
 def ensure_dir(path):
-    if not os.path.isdir(path):
+    if path and not os.path.isdir(path):
         os.makedirs(path)
 
 
@@ -141,12 +141,6 @@ def confirm_continue(message):
 
 
 def safe_step(step_name, func, *args, **kwargs):
-    """
-    Run a step, log any exception, continue, and return:
-    - True on success
-    - False on failure
-    - func() return value on success if it returns something non-None
-    """
     log("\n[+] {0}".format(step_name))
     try:
         result = func(*args, **kwargs)
@@ -258,7 +252,7 @@ def check_internet():
         ("www.python.org", 443),
         ("pypi.org", 443),
         ("github.com", 443),
-        ("go.microsoft.com", 443)
+        ("go.microsoft.com", 443),
     ]
     for host, port in hosts:
         s = socket.create_connection((host, port), 20)
@@ -279,7 +273,7 @@ def install_python38():
         "Include_test=0",
         "Include_launcher=1",
         "SimpleInstall=1",
-        'TargetDir={0}'.format(PYTHON32_ROOT),
+        "TargetDir={0}".format(PYTHON32_ROOT),
     ]
     args64 = [
         py64,
@@ -290,29 +284,19 @@ def install_python38():
         "Include_test=0",
         "Include_launcher=1",
         "SimpleInstall=1",
-        'TargetDir={0}'.format(PYTHON64_ROOT),
+        "TargetDir={0}".format(PYTHON64_ROOT),
     ]
 
     run_checked(args32, "Installing Python 3.8.10 32-bit")
     run_checked(args64, "Installing Python 3.8.10 64-bit")
 
 
-
 def install_python27():
     py27 = os.path.join(TEMP_FOLDER, PYTHON2_INSTALLER)
-
-    args = [
-        py27,
-        "/quiet",
-        "InstallAllUsers=0",
-        "PrependPath=1",
-        "Include_pip=1",
-        "Include_test=0",
-        "Include_launcher=1",
-        "SimpleInstall=1"
-    ]
-
-    run_checked(args, "Installing Python 2.7.18 32-bit")
+    run_checked(
+        ["msiexec.exe", "/i", py27, "/qn", "ALLUSERS=0"],
+        "Installing Python 2.7.18 32-bit"
+    )
 
 
 def find_py_launcher():
@@ -456,10 +440,12 @@ oLink.Save
 
 
 def set_system_symbol_path():
-    key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
-                         r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
-                         0,
-                         winreg.KEY_SET_VALUE)
+    key = winreg.OpenKey(
+        winreg.HKEY_LOCAL_MACHINE,
+        r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        0,
+        winreg.KEY_SET_VALUE
+    )
     try:
         winreg.SetValueEx(key, "_NT_SYMBOL_PATH", 0, winreg.REG_EXPAND_SZ, SYMBOL_PATH)
     finally:
@@ -514,6 +500,40 @@ def find_file_recursive(root, wanted_name):
     return None
 
 
+def find_all_files_recursive(root, wanted_name):
+    hits = []
+    for base, dirs, files in os.walk(root):
+        for name in files:
+            if name.lower() == wanted_name.lower():
+                hits.append(os.path.join(base, name))
+    return hits
+
+
+def choose_pykd_pyd_for_arch(candidates, arch_tag):
+    arch_tag = arch_tag.lower()
+    for candidate in candidates:
+        low = candidate.lower()
+        if arch_tag in low:
+            return candidate
+
+    if arch_tag == "x86":
+        for candidate in candidates:
+            low = candidate.lower()
+            if "32" in low:
+                return candidate
+
+    if arch_tag == "x64":
+        for candidate in candidates:
+            low = candidate.lower()
+            if "64" in low or "amd64" in low:
+                return candidate
+
+    if candidates:
+        return candidates[0]
+
+    return None
+
+
 def install_pykd_extensions():
     ensure_dir(ENGINE_EXT_32)
     ensure_dir(ENGINE_EXT_64)
@@ -536,6 +556,47 @@ def install_pykd_extensions():
 
     shutil.copy2(dll_x86, os.path.join(ENGINE_EXT_32, "pykd.dll"))
     shutil.copy2(dll_x64, os.path.join(ENGINE_EXT_64, "pykd.dll"))
+
+
+def install_pykd_pyd_winext(windbg_root):
+    """
+    Extract pykd.zip, install VC++ 2010 x86, then copy pykd.pyd into WinDBG winext folders.
+    """
+
+    pykd_zip = os.path.join(TEMP_FOLDER, PYKD_PYD_ZIP)
+    pykd_extract = os.path.join(TEMP_FOLDER, "pykd-pyd")
+
+    extract_zip(pykd_zip, pykd_extract)
+
+    pyd_candidates = find_all_files_recursive(pykd_extract, "pykd.pyd")
+    if not pyd_candidates:
+        raise RuntimeError("Unable to locate pykd.pyd in pykd.zip")
+
+    vcredist_x86 = os.path.join(TEMP_FOLDER, VCREDIST_X86_FILE)
+    if not os.path.isfile(vcredist_x86):
+        raise RuntimeError("VC++ 2010 x86 installer was not found: {0}".format(vcredist_x86))
+
+    run_checked([vcredist_x86, "/quiet", "/norestart"],
+                "Installing VC++ 2010 SP1 x86 for pykd.pyd")
+
+    copied_any = False
+
+    x86_winext = os.path.join(windbg_root, "x86", "winext")
+    x64_winext = os.path.join(windbg_root, "x64", "winext")
+
+    pyd_x86 = choose_pykd_pyd_for_arch(pyd_candidates, "x86")
+    pyd_x64 = choose_pykd_pyd_for_arch(pyd_candidates, "x64")
+
+    if os.path.isdir(x86_winext) and pyd_x86:
+        shutil.copy2(pyd_x86, os.path.join(x86_winext, "pykd.pyd"))
+        copied_any = True
+
+    if os.path.isdir(x64_winext) and pyd_x64:
+        shutil.copy2(pyd_x64, os.path.join(x64_winext, "pykd.pyd"))
+        copied_any = True
+
+    if not copied_any:
+        raise RuntimeError("No WinDBG winext folders were found to copy pykd.pyd into")
 
 
 def register_dll_silent(dll_path, bitness):
@@ -598,9 +659,10 @@ def download_everything():
     download_file(WINDBGLIB_URL, os.path.join(TEMP_FOLDER, WINDBGLIB_FILE), "6. windbglib.py")
     download_file(PYKD_EXT_X86_URL, os.path.join(TEMP_FOLDER, PYKD_EXT_X86_ZIP), "7. PyKD-Ext x86")
     download_file(PYKD_EXT_X64_URL, os.path.join(TEMP_FOLDER, PYKD_EXT_X64_ZIP), "8. PyKD-Ext x64")
-    download_file(VCREDIST_X86_URL, os.path.join(TEMP_FOLDER, VCREDIST_X86_FILE), "9. VC++ 2010 SP1 x86")
-    download_file(VCREDIST_X64_URL, os.path.join(TEMP_FOLDER, VCREDIST_X64_FILE), "10. VC++ 2010 SP1 x64")
-    download_file(DOTNET_URL, os.path.join(TEMP_FOLDER, DOTNET_FILE), "11. .Net Framework 4.8")
+    download_file(PYKD_PYD_URL, os.path.join(TEMP_FOLDER, PYKD_PYD_ZIP), "9. pykd.zip (pykd.pyd)")
+    download_file(VCREDIST_X86_URL, os.path.join(TEMP_FOLDER, VCREDIST_X86_FILE), "10. VC++ 2010 SP1 x86")
+    download_file(VCREDIST_X64_URL, os.path.join(TEMP_FOLDER, VCREDIST_X64_FILE), "11. VC++ 2010 SP1 x64")
+    download_file(DOTNET_URL, os.path.join(TEMP_FOLDER, DOTNET_FILE), "12. .Net Framework 4.8")
 
 
 def cleanup():
@@ -632,12 +694,14 @@ def main():
     safe_step("Updating pip and installing pykd", upgrade_pip_and_install_pykd)
     safe_step("Installing WinDBG Classic", install_windbg_classic)
 
+    safe_step("Creating system environment variable _NT_SYMBOL_PATH", set_system_symbol_path)
+
     windbg_root = safe_step("Detecting WinDBG installation folder", detect_windbg_root)
 
     if windbg_root and windbg_root is not True:
         log("[+] WinDBG debugger folder found at: {0}".format(windbg_root))
-        safe_step("Creating system environment variable _NT_SYMBOL_PATH", set_system_symbol_path)
         safe_step("Copying mona.py and windbglib.py into WinDBG x86/x64 folders", install_mona_and_windbglib, windbg_root)
+        safe_step("Extracting pykd.pyd and copying it into WinDBG winext folders", install_pykd_pyd_winext, windbg_root)
         safe_step("Obtaining and copying pykd.dll into DBG EngineExtensions folders", install_pykd_extensions)
         safe_step("Installing VC++ 2010 SP1 Redistributables", install_vcredist_2010)
         safe_step("Registering msdia files", register_msdia_files, windbg_root)
