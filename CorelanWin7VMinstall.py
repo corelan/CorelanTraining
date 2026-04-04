@@ -730,7 +730,7 @@ def main():
 
     safe_step("Checking internet connectivity", check_internet)
 
-    log("[+] Creating temp folder {0}".format(TEMP_FOLDER))
+    log("\n[+] Creating temp folder {0}".format(TEMP_FOLDER))
     ensure_dir(TEMP_FOLDER)
     ensure_dir(ENGINE_EXT_32)
     ensure_dir(ENGINE_EXT_64)
