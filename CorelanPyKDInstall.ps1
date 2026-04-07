@@ -18,8 +18,8 @@ $env:python64installer         = "python-3.9.13-amd64.exe"
 
 $python32Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
 $python64Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
-$pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/pykd-ext/2.0.0.24/x86.zip"
-$pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/pykd-ext/2.0.0.24/x64.zip"
+$pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
+$pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 
 $classicDbgBase                = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt64                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
