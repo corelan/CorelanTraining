@@ -1,7 +1,9 @@
 This repository contains a few Powershell and Python scripts:
 
-1. `CorelanVMInstall.ps1`: Will help you set up & configure a Windows 11 VM, in preparation for [Corelan Windows Exploit Development Training](https://www.corelan-training.com)
+1. `CorelanWin11VMInstall.ps1`: Will help you set up & configure a Windows 11 VM, in preparation for [Corelan Windows Exploit Development Training](https://www.corelan-training.com)
+
 2. `CorelanPyKDInstall.ps1`: This script installs and configures the necessary componetns to run Python3 / PyKD / PyKD-Ext in WinDBG(x), for both 32bit and 64bit, on Windows 10/11 
+
 3. `CorelanWin7VMinstall.py`: This python script will install the necessary components to run PyKD/PyKD-Ext scripts on a Windows 7 VM. This scripts requires a working instance of Python 2.7.18
 
 Prior to running one of the Powershell script(s) on Windows 11,  please update your Windows VM first.
@@ -10,14 +12,14 @@ Some parts of the script rely on `winget`, so make sure that is present on your 
 Make sure to run scripts from an administrator prompt!!
 
 
+<p>
+# CorelanWin11VMInstall.ps1
 
-# CorelanVMInstall.ps1
 
-
-1. Download `CorelanVMInstall.ps1` to your Windows 11/10 VM
-2. Open an administrator command prompt and go to the folder that contains the `CorelanVMInstall.ps1` file
+1. Download `CorelanWin11VMInstall.ps1` to your Windows 11/10 VM
+2. Open an administrator command prompt and go to the folder that contains the `CorelanWin11VMInstall.ps1` file
 3. Verify/confirm that you have a working internet connection
-4. run `powershell ./CorelanVMInstall.ps1`
+4. run `powershell ./CorelanWin11VMInstall.ps1`
 5. If all goes well, the script will:
   - download installers for Python 2.7.18, WinDBG, WinDBGX, PyKD, mona.py, windbglib.py and Visual Studio 2017 Desktop Express
   - install winget if needed
@@ -27,8 +29,9 @@ Make sure to run scripts from an administrator prompt!!
   - create a system environment variable `_NT_SYMBOL_PATH`
   - create an administrator Command Prompt shortcut on the Desktop
 
+</p>
 
-
+<p>
 # CorelanPyKDInstall.ps1
 
 This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2
@@ -37,17 +40,18 @@ Do not use this script unless you know what you're doing ;-)
 
 It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
 This allows you to run pykd/python scripts via `!py`.
+</p>
 
-
-
+<p>
 # CorelanWin7VMInstall.py
 
 This script kind of simulates what `CorelanPyKDInstall.ps1` does, but written in Python and for Windows 7 SP1 and later specifically.  
 You'll have to install Python 2.7.18 yourself first and then run the `CorelanWin7VMInstall.py` script from an administrator command prompt.
 
+</p>
 
 
-
+<p>
 # FAQ 
 
 ## Help, the powershell script refuses to run.  For example:
@@ -65,3 +69,4 @@ Solution:
 If that doesn't work, try `Set-ExecutionPolicy Unrestricted` instead
 
 
+</p>
