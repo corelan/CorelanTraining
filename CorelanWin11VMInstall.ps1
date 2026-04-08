@@ -25,6 +25,9 @@ $env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
 $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
 
+$engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
+$engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
+
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktopPath "Corelan CMD Prompt.lnk"
@@ -366,10 +369,12 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "       a. Installing mona.py and windbglib.py in WinDBG"
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
-	Write-Output "       b. Installing pykd.dll in WinDBG x86 winext folder"
-	Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext\" -Force
-	Write-Output "       c. Installing pykd.dll in WinDBG x64 winext folder"
-	Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\winext\" -Force
+	Write-Output "       b. Installing pykd.dll in WinDBG EngineExtensions32 folder"
+	Ensure-Folder $engineExt32
+	Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 "pykd.dll") -Force
+	Write-Output "       c. Installing pykd.dll in WinDBG EngineExtensions folder"
+	Ensure-Folder $engineExt64
+	Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination (Join-Path $engineExt64 "pykd.dll") -Force
 	
 	# if Immunity Debugger was already installed, copy mona.py into the PyCommands folder
 	if (Test-Path $env:immunitypycommandsfolder -PathType Container)
@@ -401,7 +406,8 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "    ==> Please check the WinDBG log window and confirm that:"
 	Write-Output "        - the !peb command didn't produce an error message"
 	Write-Output "        - the !py -2 mona command resulted in producing a list of available mona commands"
-	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd.dll; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
+	$windbgTestArgs = '-c ".load pykd"; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
+	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList $windbgTestArgs
 	
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
