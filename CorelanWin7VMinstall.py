@@ -690,12 +690,18 @@ def create_wpy2_bat_files(windbg_root):
         "REM www.corelan-training.com\r\n"
         "REM ==========================================\r\n"
         "\r\n"
+        "set ORIGPATH=%PATH\r\n"
+        "set PATH=c:\\Python27;%PATH%"
         "set PYTHONHOME=C:\\Python27\r\n"
         "set PYTHONPATH=C:\\Python27\\Lib\r\n"
         "\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as mona !py --global mona.py' \"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
+        "\r\n"
+        "set PATH=%ORIGPATH%\r\n"
+        "set PYTHONHOME=\r\n"
+        "set PYTHONPATH=\r\n"
     )
 
     content_x64 = (
@@ -706,12 +712,18 @@ def create_wpy2_bat_files(windbg_root):
         "REM www.corelan-training.com\r\n"
         "REM ==========================================\r\n"
         "\r\n"
+        "set ORIGPATH=%PATH\r\n"
+        "set PATH=c:\\Python27-64;%PATH%"
         "set PYTHONHOME=C:\\Python27-64\r\n"
         "set PYTHONPATH=C:\\Python27-64\\Lib\r\n"
         "\r\n"
         "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
+        "\r\n"
+        "set PATH=%ORIGPATH%\r\n"
+        "set PYTHONHOME=\r\n"
+        "set PYTHONPATH=\r\n"        
     )
 
     if os.path.isdir(x86_dir):
@@ -732,12 +744,18 @@ def create_wpy3_bat_files(windbg_root):
         "REM www.corelan-training.com\r\n"
         "REM ==========================================\r\n"
         "\r\n"
+        "set ORIGPATH=%PATH\r\n"
+        "set PATH=%LOCALAPPDATA%\\Programs\\Python\\Python38-32;%PATH%"
         "set PYTHONHOME=%LOCALAPPDATA%\\Programs\\Python\\Python38-32\r\n"
         "set PYTHONPATH=%LOCALAPPDATA%\\Programs\\Python\\Python38-32\\Lib\r\n"
         "\r\n"
         "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
+        "\r\n"
+        "set PATH=%ORIGPATH%\r\n"
+        "set PYTHONHOME=\r\n"
+        "set PYTHONPATH=\r\n"        
     )
 
     content_x64 = (
@@ -748,12 +766,18 @@ def create_wpy3_bat_files(windbg_root):
         "REM www.corelan-training.com\r\n"
         "REM ==========================================\r\n"
         "\r\n"
+        "set ORIGPATH=%PATH\r\n"
+        "set PATH=%LOCALAPPDATA%\\Programs\\Python\\Python38;%PATH%"
         "set PYTHONHOME=%LOCALAPPDATA%\\Programs\\Python\\Python38\r\n"
         "set PYTHONPATH=%LOCALAPPDATA%\\Programs\\Python\\Python38\\Lib\r\n"
         "\r\n"
         "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
+        "\r\n"
+        "set PATH=%ORIGPATH%\r\n"
+        "set PYTHONHOME=\r\n"
+        "set PYTHONPATH=\r\n"        
     )
 
     if os.path.isdir(x86_dir):
