@@ -16,6 +16,7 @@ $env:tempfolder = "c:\corelantemp"
 $env:pythonfile = "python-2.7.18.msi"
 $env:windbgfile = "winsdksetup.exe"
 $env:vscommunityfile = "vs_WDExpress.exe"
+$env:vcredistfile = "vcredist_x86.exe"
 $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdExtX86File = "pykd-ext-x86.zip"
@@ -24,9 +25,6 @@ $env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/
 $env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
 $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
-
-$engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
-$engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
 
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
@@ -186,14 +184,7 @@ function Ensure-Winget
 
     try
     {
-        Write-Output "    Downloading App Installer package"
-
-        if (Test-Path $appInstallerFile)
-        {
-            Remove-Item $appInstallerFile -Force
-        }
-
-        Invoke-WebRequest -Uri $appInstallerUrl -OutFile $appInstallerFile -UseBasicParsing *>$null
+        Download-File -Uri $appInstallerUrl -OutFile $appInstallerFile -Label "Downloading App Installer package"
     }
     catch
     {
@@ -273,7 +264,7 @@ Test-InternetConnectivity
 
 
 Write-Output "[+] Creating temp folder $env:tempfolder"
-New-Item -Path "c:\" -Name "corelantemp" -ItemType "directory" *>$null
+Ensure-Folder $env:tempfolder
 
 Ensure-Winget -TempFolder $env:tempfolder
 
@@ -303,23 +294,18 @@ $bytes[0x15] = $bytes[0x15] -bor 0x20
 if (Test-Path $env:tempfolder -PathType Container)
 { 
 	Write-Output "[+] Downloading packages to temp folder"
-	Write-Output "    1. Python 2.7.18"
-	Invoke-WebRequest -Uri "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi" -OutFile "$env:tempfolder\$env:pythonfile" *>$null
-	Write-Output "    2. Classic WinDBG"
-	Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409" -OutFile "$env:tempfolder\$env:windbgfile" *>$null
-	Write-Output "    3. PyKD extension package (x86)"
-	Invoke-WebRequest -Uri $env:pykdExtX86Url -OutFile "$env:tempfolder\$env:pykdExtX86File" *>$null
+	Download-File -Uri "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi" -OutFile "$env:tempfolder\$env:pythonfile" -Label "1. Python 2.7.18"
+	Download-File -Uri "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409" -OutFile "$env:tempfolder\$env:windbgfile" -Label "2. Classic WinDBG"
+	Download-File -Uri $env:pykdExtX86Url -OutFile "$env:tempfolder\$env:pykdExtX86File" -Label "3. PyKD extension package (x86)"
+	Remove-Item -Path "$env:tempfolder\pykd-ext-x86" -Recurse -Force -ErrorAction SilentlyContinue
 	Expand-Archive -Path "$env:tempfolder\$env:pykdExtX86File" -DestinationPath "$env:tempfolder\pykd-ext-x86" -Force
-	Write-Output "    4. PyKD extension package (x64)"
-	Invoke-WebRequest -Uri $env:pykdExtX64Url -OutFile "$env:tempfolder\$env:pykdExtX64File" *>$null
+	Download-File -Uri $env:pykdExtX64Url -OutFile "$env:tempfolder\$env:pykdExtX64File" -Label "4. PyKD extension package (x64)"
+	Remove-Item -Path "$env:tempfolder\pykd-ext-x64" -Recurse -Force -ErrorAction SilentlyContinue
 	Expand-Archive -Path "$env:tempfolder\$env:pykdExtX64File" -DestinationPath "$env:tempfolder\pykd-ext-x64" -Force
-	Write-Output "    5. mona.py"
-	Invoke-WebRequest -Uri "https://github.com/corelan/mona/raw/master/mona.py" -OutFile "$env:tempfolder\$env:monafile" *>$null
-	Write-Output "    6. windbglib.py"
-	Invoke-WebRequest -Uri "https://github.com/corelan/windbglib/raw/master/windbglib.py" -OutFile "$env:tempfolder\$env:windbglibfile" *>$null
-	Write-Output "    7. Visual Studio 2017 Desktop Express"
-	Invoke-WebRequest -Uri "https://aka.ms/vs/15/release/vs_WDExpress.exe" -OutFile "$env:tempfolder\$env:vscommunityfile" *>$null
-
+	Download-File -Uri "https://github.com/corelan/mona/raw/master/mona.py" -OutFile "$env:tempfolder\$env:monafile" -Label "5. mona.py"
+	Download-File -Uri "https://github.com/corelan/windbglib/raw/master/windbglib.py" -OutFile "$env:tempfolder\$env:windbglibfile" -Label "6. windbglib.py"
+	Download-File -Uri "https://aka.ms/vs/15/release/vs_WDExpress.exe" -OutFile "$env:tempfolder\$env:vscommunityfile" -Label "7. Visual Studio 2017 Desktop Express"
+	Download-File -Uri "https://download.microsoft.com/download/d/d/9/dd99f07f-e5f0-4e12-97a6-5f6d0f4d7b6f/vcredist_x86.exe" -OutFile "$env:tempfolder\$env:vcredistfile" -Label "8. VC++ Redistributable (x86)"
 
 	Write-Output "[+] Creating System Environment variable _NT_SYMBOL_PATH"
 	[Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
@@ -345,7 +331,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "       Installing PyKD via pip in Python 2.7.18"
 	Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd'
 	Write-Output "    2. VC++ Redistributable"
-	Start-Process "$env:tempfolder\vcredist_x86.exe" -Wait -ArgumentList "/q"
+	Start-Process "$env:tempfolder\$env:vcredistfile" -Wait -ArgumentList "/q"
 	if (Test-Path "C:\Program Files (x86)\Common Files\microsoft shared\VC\msdia90.dll" -PathType Leaf)
 	{
 		Write-Output "    3. Register msdia90.dll"
@@ -369,6 +355,8 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "       a. Installing mona.py and windbglib.py in WinDBG"
 	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
 	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
+	$engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
+	$engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
 	Write-Output "       b. Installing pykd.dll in WinDBG EngineExtensions32 folder"
 	Ensure-Folder $engineExt32
 	Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 "pykd.dll") -Force
@@ -406,8 +394,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Write-Output "    ==> Please check the WinDBG log window and confirm that:"
 	Write-Output "        - the !peb command didn't produce an error message"
 	Write-Output "        - the !py -2 mona command resulted in producing a list of available mona commands"
-	$windbgTestArgs = '-c ".load pykd"; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
-	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList $windbgTestArgs
+	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
 	
 	Write-Output "[+] Removing temporary folder again"
 	Remove-Item -Path "$env:tempfolder" -recurse -force
