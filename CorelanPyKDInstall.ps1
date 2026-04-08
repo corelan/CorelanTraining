@@ -9,6 +9,7 @@
 # PowerShell script to install Python3.9 and a PyKD version that is compatible with Python3
 # for WinDBG Classic and WinDBGX on Windows 10/11
 
+# DO NOT RUN THIS ON WINDOWS 7
 
 $ErrorActionPreference = "Stop"
 
