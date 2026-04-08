@@ -10,10 +10,9 @@ Some parts of the script rely on `winget`, so make sure that is present on your 
 Make sure to run scripts from an administrator prompt!!
 
 
+
 # CorelanVMInstall.ps1
 
-Usage
------
 
 1. Download `CorelanVMInstall.ps1` to your Windows 11/10 VM
 2. Open an administrator command prompt and go to the folder that contains the `CorelanVMInstall.ps1` file
@@ -29,6 +28,7 @@ Usage
   - create an administrator Command Prompt shortcut on the Desktop
 
 
+
 # CorelanPyKDInstall.ps1
 
 This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2
@@ -39,10 +39,12 @@ It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension
 This allows you to run pykd/python scripts via `!py`.
 
 
+
 # CorelanWin7VMInstall.py
 
 This script kind of simulates what `CorelanPyKDInstall.ps1` does, but written in Python and for Windows 7 SP1 and later specifically.  
 You'll have to install Python 2.7.18 yourself first and then run the `CorelanWin7VMInstall.py` script from an administrator command prompt.
+
 
 
 
