@@ -305,7 +305,7 @@ if (Test-Path $env:tempfolder -PathType Container)
 	Download-File -Uri "https://github.com/corelan/mona/raw/master/mona.py" -OutFile "$env:tempfolder\$env:monafile" -Label "5. mona.py"
 	Download-File -Uri "https://github.com/corelan/windbglib/raw/master/windbglib.py" -OutFile "$env:tempfolder\$env:windbglibfile" -Label "6. windbglib.py"
 	Download-File -Uri "https://aka.ms/vs/15/release/vs_WDExpress.exe" -OutFile "$env:tempfolder\$env:vscommunityfile" -Label "7. Visual Studio 2017 Desktop Express"
-	Download-File -Uri "https://download.microsoft.com/download/d/d/9/dd99f07f-e5f0-4e12-97a6-5f6d0f4d7b6f/vcredist_x86.exe" -OutFile "$env:tempfolder\$env:vcredistfile" -Label "8. VC++ Redistributable (x86)"
+    Download-File -Uri "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe" -OutFile "$env:tempfolder\$env:vcredistfile" -Label "8. VC++ Redistributable (x86)"
 
 	Write-Output "[+] Creating System Environment variable _NT_SYMBOL_PATH"
 	[Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
