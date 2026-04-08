@@ -837,7 +837,7 @@ def main():
         log("[!] WinDBG debugger folder was not found. Skipping WinDBG-dependent steps.")
         safe_step("Installing VC++ 2010 SP1 Redistributables", install_vcredist_2010)
 
-    safe_step("Creating elevated command prompt shortcut on desktop", create_admin_cmd_shortcut_hack)
+    safe_step("Creating elevated command prompt shortcut on desktop", create_admin_cmd_shortcut_hack, windbg_root)
     safe_step("Cleaning up temporary folder", cleanup)
 
     log("")
