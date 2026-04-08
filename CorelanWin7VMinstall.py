@@ -695,7 +695,7 @@ def create_wpy2_bat_files(windbg_root):
         "set PYTHONPATH=C:\\Python27\\Lib\r\n"
         "\r\n"
         "REM Define base command (adjust path to wew file as needed)\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as mona !py --global mona.py'\"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
     )
@@ -713,7 +713,7 @@ def create_wpy2_bat_files(windbg_root):
         "set PYTHONPATH=C:\\Python27-64\\Lib\r\n"
         "\r\n"
         "REM Define base command (adjust path to wew file as needed)\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as mona !py --global mona.py'\"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
     )
@@ -759,7 +759,7 @@ def create_wpy3_bat_files(windbg_root):
         "set PYTHONPATH=%LOCALAPPDATA%\\Programs\\Python\\Python38\\Lib\r\n"
         "\r\n"
         "REM Define base command (adjust path to wew file as needed)\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as mona !py --global mona.py\"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as mona !py --global mona.py' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
     )
