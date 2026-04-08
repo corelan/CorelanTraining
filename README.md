@@ -13,7 +13,7 @@ Make sure to run scripts from an administrator prompt!!
 
 
 <p>
-# CorelanWin11VMInstall.ps1
+<h2> CorelanWin11VMInstall.ps1</h2>
 
 
 1. Download `CorelanWin11VMInstall.ps1` to your Windows 11/10 VM
@@ -32,7 +32,7 @@ Make sure to run scripts from an administrator prompt!!
 </p>
 
 <p>
-# CorelanPyKDInstall.ps1
+<h2> CorelanPyKDInstall.ps1 </h2>
 
 This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2
 Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
@@ -43,7 +43,7 @@ This allows you to run pykd/python scripts via `!py`.
 </p>
 
 <p>
-# CorelanWin7VMInstall.py
+<h2> CorelanWin7VMInstall.py </h2>
 
 This script kind of simulates what `CorelanPyKDInstall.ps1` does, but written in Python and for Windows 7 SP1 and later specifically.  
 You'll have to install Python 2.7.18 yourself first and then run the `CorelanWin7VMInstall.py` script from an administrator command prompt.
@@ -52,9 +52,11 @@ You'll have to install Python 2.7.18 yourself first and then run the `CorelanWin
 
 
 <p>
-# FAQ 
+<h2> FAQ </h2>
 
-## Help, the powershell script refuses to run.  For example:
+<h4> Help, the powershell script refuses to run.  </h4>
+
+For example:
 
 ```
 ./CorelanVMInstall.ps1 : File CorelanVMInstall.ps1 cannot be loaded because running scripts is disabled on
