@@ -7,7 +7,7 @@
 # www.corelan.be
 #
 #
-# PowerShell script to prepare a Windows 11/10 machine for use in the  
+# PowerShell script to prepare a Windows 11/10 machine for use in the
 # Corelan Stack & Heap Exploit Development classes
 #
 #
@@ -21,10 +21,28 @@ $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdExtX86File = "pykd-ext-x86.zip"
 $env:pykdExtX64File = "pykd-ext-x64.zip"
+$env:pythonUrl = "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi"
+$env:windbgUrl = "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409"
+$env:vscommunityUrl = "https://aka.ms/vs/15/release/vs_WDExpress.exe"
+$env:vcredistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe"
+$env:monaUrl = "https://github.com/corelan/mona/raw/master/mona.py"
+$env:windbglibUrl = "https://github.com/corelan/windbglib/raw/master/windbglib.py"
 $env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
 $env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
 $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
+
+$classicDbgBase = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
+# Debugger extension search path for both WinDBG Classic and modern WinDbg.
+# %LOCALAPPDATA%\dbg\UserExtensions is the extension gallery location and requires a manifest.
+$engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
+$engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
+$vcShared32 = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
+$msdia140Target = Join-Path $vcShared32 "msdia140.dll"
+$msdia100_64 = "C:\Program Files\Common Files\microsoft shared\VC\msdia100.dll"
+$msdia120_32 = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\msdia120.dll"
+$regsvr32_64 = "$env:WINDIR\System32\regsvr32.exe"
+$regsvr32_32 = "$env:WINDIR\SysWOW64\regsvr32.exe"
 
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
@@ -45,10 +63,10 @@ function Confirm-Continue
         {
             "y" { return }
             "yes" { return }
-            "n" 
-            { 
+            "n"
+            {
                 Write-Output "Aborted by user."
-                exit 1 
+                exit 1
             }
             "no"
             {
@@ -105,7 +123,6 @@ function Download-File
         Remove-Item $OutFile -Force
     }
 
-    # Try curl first
     $curl = "$env:SystemRoot\System32\curl.exe"
 
     if (Test-Path $curl)
@@ -117,7 +134,6 @@ function Download-File
         }
     }
 
-    # Fallback to BITS
     try
     {
         Start-BitsTransfer -Source $Uri -Destination $OutFile
@@ -221,8 +237,6 @@ function Ensure-Winget
     Write-Output "    winget installed successfully"
 }
 
-
-
 function Test-InternetConnectivity
 {
     Write-Output "[+] Checking internet connectivity"
@@ -253,6 +267,53 @@ function Test-InternetConnectivity
     }
 }
 
+function Find-Msdia140
+{
+    param(
+        [string]$SearchRoot
+    )
+
+    $found = Get-ChildItem -Path $SearchRoot -Recurse -Filter "msdia140.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found)
+    {
+        return $found.FullName
+    }
+
+    return $null
+}
+
+function Register-DllSilent
+{
+    param(
+        [string]$DllPath,
+        [ValidateSet("x86","x64")]
+        [string]$Bitness,
+        [switch]$ContinueOnMissing
+    )
+
+    if (-not (Test-Path $DllPath -PathType Leaf))
+    {
+        if ($ContinueOnMissing)
+        {
+            Write-Output "    File not found, continuing: $DllPath"
+            return
+        }
+        else
+        {
+            Write-Output "*** File not found: $DllPath"
+            exit 1
+        }
+    }
+
+    $regsvr = if ($Bitness -eq "x86") { $regsvr32_32 } else { $regsvr32_64 }
+    $proc = Start-Process -FilePath $regsvr -ArgumentList "`"$DllPath`" /s" -Wait -PassThru
+    if ($proc.ExitCode -ne 0)
+    {
+        Write-Output "*** regsvr32 failed for $DllPath (exit code $($proc.ExitCode))"
+        exit 1
+    }
+}
+
 ### MAIN ROUTINE ###
 
 Ensure-Admin
@@ -262,19 +323,18 @@ Confirm-Continue
 
 Test-InternetConnectivity
 
-
 Write-Output "[+] Creating temp folder $env:tempfolder"
 Ensure-Folder $env:tempfolder
+Ensure-Folder $engineExt32
+Ensure-Folder $engineExt64
+Ensure-Folder $vcShared32
 
 Ensure-Winget -TempFolder $env:tempfolder
 
-
 Write-Output "[+] Creating shortcut to cmd.exe on desktop (set to 'Run As Administrator')."
 
-# Create shortcut
 $WshShell = New-Object -ComObject WScript.Shell
 $shortcut = $WshShell.CreateShortcut($shortcutPath)
-
 $shortcut.TargetPath = $cmdPath
 $shortcut.Arguments = $cmdArguments
 $shortcut.WorkingDirectory = "$env:WINDIR\System32"
@@ -282,128 +342,136 @@ $shortcut.WindowStyle = 1
 $shortcut.IconLocation = "$cmdPath,0"
 $shortcut.Save()
 
-# --- Enable "Run as Administrator" flag ---
 $bytes = [System.IO.File]::ReadAllBytes($shortcutPath)
 $bytes[0x15] = $bytes[0x15] -bor 0x20
 [System.IO.File]::WriteAllBytes($shortcutPath, $bytes)
 
-
-# Since all the URLs used for downloading packages uses TLS 1.2 so we need to make sure TLS 1.2 is being used while files been requested otherwise we get SSL error
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 if (Test-Path $env:tempfolder -PathType Container)
-{ 
-	Write-Output "[+] Downloading packages to temp folder"
-	Download-File -Uri "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi" -OutFile "$env:tempfolder\$env:pythonfile" -Label "1. Python 2.7.18"
-	Download-File -Uri "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409" -OutFile "$env:tempfolder\$env:windbgfile" -Label "2. Classic WinDBG"
-	Download-File -Uri $env:pykdExtX86Url -OutFile "$env:tempfolder\$env:pykdExtX86File" -Label "3. PyKD extension package (x86)"
-	Remove-Item -Path "$env:tempfolder\pykd-ext-x86" -Recurse -Force -ErrorAction SilentlyContinue
-	Expand-Archive -Path "$env:tempfolder\$env:pykdExtX86File" -DestinationPath "$env:tempfolder\pykd-ext-x86" -Force
-	Download-File -Uri $env:pykdExtX64Url -OutFile "$env:tempfolder\$env:pykdExtX64File" -Label "4. PyKD extension package (x64)"
-	Remove-Item -Path "$env:tempfolder\pykd-ext-x64" -Recurse -Force -ErrorAction SilentlyContinue
-	Expand-Archive -Path "$env:tempfolder\$env:pykdExtX64File" -DestinationPath "$env:tempfolder\pykd-ext-x64" -Force
-	Download-File -Uri "https://github.com/corelan/mona/raw/master/mona.py" -OutFile "$env:tempfolder\$env:monafile" -Label "5. mona.py"
-	Download-File -Uri "https://github.com/corelan/windbglib/raw/master/windbglib.py" -OutFile "$env:tempfolder\$env:windbglibfile" -Label "6. windbglib.py"
-	Download-File -Uri "https://aka.ms/vs/15/release/vs_WDExpress.exe" -OutFile "$env:tempfolder\$env:vscommunityfile" -Label "7. Visual Studio 2017 Desktop Express"
-    Download-File -Uri "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe" -OutFile "$env:tempfolder\$env:vcredistfile" -Label "8. VC++ Redistributable (x86)"
+{
+    Write-Output "[+] Downloading packages to temp folder"
+    Download-File -Uri $env:pythonUrl      -OutFile (Join-Path $env:tempfolder $env:pythonfile)      -Label "1. Python 2.7.18"
+    Download-File -Uri $env:windbgUrl      -OutFile (Join-Path $env:tempfolder $env:windbgfile)      -Label "2. Classic WinDBG"
+    Download-File -Uri $env:pykdExtX86Url  -OutFile (Join-Path $env:tempfolder $env:pykdExtX86File)  -Label "3. PyKD extension package (x86)"
+    Download-File -Uri $env:pykdExtX64Url  -OutFile (Join-Path $env:tempfolder $env:pykdExtX64File)  -Label "4. PyKD extension package (x64)"
+    Download-File -Uri $env:monaUrl        -OutFile (Join-Path $env:tempfolder $env:monafile)        -Label "5. mona.py"
+    Download-File -Uri $env:windbglibUrl   -OutFile (Join-Path $env:tempfolder $env:windbglibfile)   -Label "6. windbglib.py"
+    Download-File -Uri $env:vscommunityUrl -OutFile (Join-Path $env:tempfolder $env:vscommunityfile) -Label "7. Visual Studio 2017 Desktop Express"
+    Download-File -Uri $env:vcredistUrl    -OutFile (Join-Path $env:tempfolder $env:vcredistfile)    -Label "8. VC++ 2010 SP1 Redistributable (x86)"
 
-	Write-Output "[+] Creating System Environment variable _NT_SYMBOL_PATH"
-	[Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
+    Remove-Item -Path "$env:tempfolder\pykd-ext-x86" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:tempfolder\pykd-ext-x64" -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -Path (Join-Path $env:tempfolder $env:pykdExtX86File) -DestinationPath "$env:tempfolder\pykd-ext-x86" -Force
+    Expand-Archive -Path (Join-Path $env:tempfolder $env:pykdExtX64File) -DestinationPath "$env:tempfolder\pykd-ext-x64" -Force
 
-	Write-Output "[+] Adding c:\Python27 to PATH"
-	$oldpath = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).path
-	if ($oldpath -like '*c:\Python27*') 
-	{ 
-		Write-Output "    PATH already contains entry for Python 2.7"
-	}
-	else
-	{ 
-		$newPath = "$oldpath;c:\Python27"
-		Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath
-	}
-	
-	Write-Output "[+] Installing software"
-	Write-Output "    1. Python 2.7"
-	Start-Process "$env:tempfolder\$env:pythonfile"  -Wait -ArgumentList '/quiet /passive'
-	Write-Output "       Updating pip in Python 2.7.18"
-	Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m ensurepip --default-pip'
-	Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pip'
-	Write-Output "       Installing PyKD via pip in Python 2.7.18"
-	Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd'
-	Write-Output "    2. VC++ Redistributable"
-	Start-Process "$env:tempfolder\$env:vcredistfile" -Wait -ArgumentList "/q"
-	if (Test-Path "C:\Program Files (x86)\Common Files\microsoft shared\VC\msdia90.dll" -PathType Leaf)
-	{
-		Write-Output "    3. Register msdia90.dll"
-		Start-Process regsvr32 -Wait -ArgumentList '"C:\Program Files (x86)\Common Files\microsoft shared\VC\msdia90.dll" /s'
-	}
-	else
-	{
-		Write-Output "    3. *** Error registering msdia90.dll, file does not exist ***"
-	}	
-	Write-Output "    4. WinDBG"
-	Write-Output "       Hold on, this may take a while..."
-	Start-Process "$env:tempfolder\$env:windbgfile" -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q'
+    Write-Output "[+] Creating System Environment variable _NT_SYMBOL_PATH"
+    [Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
 
-	Write-Output "    5. WinDBGX"
-	winget install --id Microsoft.WinDbg -e --source winget --silent --accept-package-agreements --accept-source-agreements
+    Write-Output "[+] Adding c:\Python27 to PATH"
+    $oldpath = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).path
+    if ($oldpath -like '*c:\Python27*')
+    {
+        Write-Output "    PATH already contains entry for Python 2.7"
+    }
+    else
+    {
+        $newPath = "$oldpath;c:\Python27"
+        Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath
+    }
 
-	Write-Output "    6. Visual Studio Code"
-	winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
+    Write-Output "[+] Installing software"
+    Write-Output "    1. Python 2.7"
+    Start-Process (Join-Path $env:tempfolder $env:pythonfile) -Wait -ArgumentList '/quiet /passive'
 
-	Write-Output "    7. PyKD, windbglib and mona"
-	Write-Output "       a. Installing mona.py and windbglib.py in WinDBG"
-	Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
-	Copy-Item -Path "$env:tempfolder\$env:windbglibfile" -Destination "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\"
-	$engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
-	$engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
-	Write-Output "       b. Installing pykd.dll in WinDBG EngineExtensions32 folder"
-	Ensure-Folder $engineExt32
-	Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 "pykd.dll") -Force
-	Write-Output "       c. Installing pykd.dll in WinDBG EngineExtensions folder"
-	Ensure-Folder $engineExt64
-	Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination (Join-Path $engineExt64 "pykd.dll") -Force
-	
-	# if Immunity Debugger was already installed, copy mona.py into the PyCommands folder
-	if (Test-Path $env:immunitypycommandsfolder -PathType Container)
-	{
-		Write-Output "       d. Installing mona.py in Immunity Debugger"
-		Copy-Item -Path "$env:tempfolder\$env:monafile" -Destination $env:immunitypycommandsfolder -Force
+    Write-Output "       Updating pip in Python 2.7.18"
+    Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m ensurepip --default-pip'
+    Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pip'
 
-		# Check for mona.ini
-		$monaIniPath = Join-Path $env:immunityprogramfolder "mona.ini"
+    Write-Output "       Installing PyKD via pip in Python 2.7.18"
+    Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd'
 
-		if (-not (Test-Path $monaIniPath -PathType Leaf))
-		{
-			Write-Output "       e. Creating mona.ini"
-			"workingfolder=c:\logs\%p" | Out-File -FilePath $monaIniPath -Encoding ASCII
-		}
-		else
-		{
-			Write-Output "       e. mona.ini already exists"
-		}
-	}
+    Write-Output "    2. VC++ 2010 SP1 Redistributable (x86)"
+    Start-Process (Join-Path $env:tempfolder $env:vcredistfile) -Wait -ArgumentList '/quiet /norestart'
 
-	Write-Output "    8. 7Zip"
-	winget install --id 7zip.7zip -e --source winget --silent --accept-package-agreements --accept-source-agreements
-	
-	Write-Output "    9. Visual Studio 2017 Desktop Express - manual install"
-	Start-Process "$env:tempfolder\$env:vscommunityfile" -Wait
+    $msdia140Source = Find-Msdia140 -SearchRoot "C:\Python27"
+    if ($msdia140Source)
+    {
+        Write-Output "    3. Copying msdia140.dll to $vcShared32"
+        Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force
+        Write-Output "       Registering msdia140.dll"
+        Register-DllSilent -DllPath $msdia140Target -Bitness x86
+    }
+    else
+    {
+        Write-Output "    3. msdia140.dll not found under C:\Python27, skipping"
+    }
 
-	Write-Output "[+] Launching WinDBG to check if everything is ok"
-	Write-Output "    ==> Please check the WinDBG log window and confirm that:"
-	Write-Output "        - the !peb command didn't produce an error message"
-	Write-Output "        - the !py -2 mona command resulted in producing a list of available mona commands"
-	Start-Process "C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\windbg" -ArgumentList '-c ".load pykd; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
-	
-	Write-Output "[+] Removing temporary folder again"
-	Remove-Item -Path "$env:tempfolder" -recurse -force
-	Write-Output ""
-	Write-Output "[+] All set"
-	Write-Output ""
-	Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
+    Write-Output "    4. Registering msdia100.dll (continue if missing)"
+    Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
+
+    Write-Output "    5. Registering msdia120.dll"
+    Register-DllSilent -DllPath $msdia120_32 -Bitness x86
+
+    Write-Output "    6. WinDBG"
+    Write-Output "       Hold on, this may take a while..."
+    Start-Process (Join-Path $env:tempfolder $env:windbgfile) -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q'
+
+    Write-Output "    7. WinDBGX"
+    winget install --id Microsoft.WinDbg -e --source winget --silent --accept-package-agreements --accept-source-agreements
+
+    Write-Output "    8. Visual Studio Code"
+    winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
+
+    Write-Output "    9. PyKD, windbglib and mona"
+    Write-Output "       a. Installing mona.py and windbglib.py in WinDBG"
+    Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination (Join-Path $classicDbgBase 'x86') -Force
+    Copy-Item -Path (Join-Path $env:tempfolder $env:windbglibfile) -Destination (Join-Path $classicDbgBase 'x86') -Force
+
+    Write-Output "       b. Installing pykd.dll in debugger extension search path x86 (EngineExtensions32)"
+    Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 'pykd.dll') -Force
+
+    Write-Output "       c. Installing pykd.dll in debugger extension search path x64 (EngineExtensions)"
+    Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination (Join-Path $engineExt64 'pykd.dll') -Force
+
+    if (Test-Path $env:immunitypycommandsfolder -PathType Container)
+    {
+        Write-Output "       d. Installing mona.py in Immunity Debugger"
+        Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination $env:immunitypycommandsfolder -Force
+
+        $monaIniPath = Join-Path $env:immunityprogramfolder "mona.ini"
+
+        if (-not (Test-Path $monaIniPath -PathType Leaf))
+        {
+            Write-Output "       e. Creating mona.ini"
+            "workingfolder=c:\logs\%p" | Out-File -FilePath $monaIniPath -Encoding ASCII
+        }
+        else
+        {
+            Write-Output "       e. mona.ini already exists"
+        }
+    }
+
+    Write-Output "    10. 7Zip"
+    winget install --id 7zip.7zip -e --source winget --silent --accept-package-agreements --accept-source-agreements
+
+    Write-Output "    11. Visual Studio 2017 Desktop Express - manual install"
+    Start-Process (Join-Path $env:tempfolder $env:vscommunityfile) -Wait
+
+    Write-Output "[+] Launching WinDBG to check if everything is ok"
+    Write-Output "    ==> Please check the WinDBG log window and confirm that:"
+    Write-Output "        - the !peb command didn't produce an error message"
+    Write-Output "        - the !py -2 mona command resulted in producing a list of available mona commands"
+    Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
+
+    Write-Output "[+] Removing temporary folder again"
+    Remove-Item -Path $env:tempfolder -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output ""
+    Write-Output "[+] All set"
+    Write-Output ""
+    Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
 }
 else
-{ 
-	Write-Output "*** Oops, folder '$env:tempfolder' does not exist"
+{
+    Write-Output "*** Oops, folder '$env:tempfolder' does not exist"
 }
