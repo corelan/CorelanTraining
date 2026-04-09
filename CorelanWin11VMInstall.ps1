@@ -17,6 +17,7 @@ $env:pythonfile = "python-2.7.18.msi"
 $env:windbgfile = "winsdksetup.exe"
 $env:vscommunityfile = "vs_WDExpress.exe"
 $env:vcredistfile = "vcredist_x86.exe"
+$env:vc2010redistfile = "vc2010_runtime_redist_x86.exe"
 $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdExtX86File = "pykd-ext-x86.zip"
@@ -25,6 +26,7 @@ $env:pythonUrl = "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi"
 $env:windbgUrl = "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409"
 $env:vscommunityUrl = "https://aka.ms/vs/15/release/vs_WDExpress.exe"
 $env:vcredistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe"
+$env:vc2010redistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
 $env:monaUrl = "https://github.com/corelan/mona/raw/master/mona.py"
 $env:windbglibUrl = "https://github.com/corelan/windbglib/raw/master/windbglib.py"
 $env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
@@ -33,13 +35,11 @@ $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debug
 $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
 
 $classicDbgBase = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
-# Debugger extension search path for both WinDBG Classic and modern WinDbg.
-# %LOCALAPPDATA%\dbg\UserExtensions is the extension gallery location and requires a manifest.
 $engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
 $engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
 $vcShared32 = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
 $msdia140Target = Join-Path $vcShared32 "msdia140.dll"
-$msdia100_64 = "C:\Program Files\Common Files\microsoft shared\VC\msdia100.dll"
+$msdia100_32 = Join-Path $vcShared32 "msdia100.dll"
 $msdia120_32 = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\msdia120.dll"
 $regsvr32_64 = "$env:WINDIR\System32\regsvr32.exe"
 $regsvr32_32 = "$env:WINDIR\SysWOW64\regsvr32.exe"
@@ -65,13 +65,13 @@ function Confirm-Continue
             "yes" { return }
             "n"
             {
-                Write-Output "Aborted by user."
-                exit 1
+                Write-Output "Skipping winget installation."
+                return $false
             }
             "no"
             {
-                Write-Output "Aborted by user."
-                exit 1
+                Write-Output "Skipping winget installation."
+                return $false
             }
             default
             {
@@ -98,9 +98,10 @@ function Ensure-Admin
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
     {
         Write-Output "**********************************************"
-        Write-Output "!! This script must be run as Administrator !!"
+        Write-Output "!! This script is not running as Administrator !!"
+        Write-Output "!! Some install/registration steps may fail.  !!"
+        Write-Output "!! Continuing anyway.                         !!"
         Write-Output "**********************************************"
-        exit 1
     }
     else
     {
@@ -130,19 +131,19 @@ function Download-File
         & $curl -L --fail -o $OutFile $Uri
         if ($LASTEXITCODE -eq 0)
         {
-            return
+            return $true
         }
     }
 
     try
     {
         Start-BitsTransfer -Source $Uri -Destination $OutFile
-        return
+        return $true
     }
     catch
     {
-        Write-Output "*** Download failed with curl and BITS"
-        exit 1
+        Write-Output "*** Download failed with curl and BITS, continuing"
+        return $false
     }
 }
 
@@ -157,7 +158,7 @@ function Ensure-Winget
     if (Get-Command winget -ErrorAction SilentlyContinue)
     {
         Write-Output "    winget found"
-        return
+        return $true
     }
 
     Write-Output "*** winget was not found on this system."
@@ -177,12 +178,12 @@ function Ensure-Winget
             "n"
             {
                 Write-Output "Aborted by user."
-                exit 1
+                return $false
             }
             "no"
             {
                 Write-Output "Aborted by user."
-                exit 1
+                return $false
             }
             default
             {
@@ -204,9 +205,8 @@ function Ensure-Winget
     }
     catch
     {
-        Write-Output "*** Failed to download App Installer package"
-        Write-Output "*** Please install winget manually and run this script again."
-        exit 1
+        Write-Output "*** Failed to download App Installer package, continuing without winget"
+        return $false
     }
 
     try
@@ -216,9 +216,8 @@ function Ensure-Winget
     }
     catch
     {
-        Write-Output "*** Failed to install App Installer package"
-        Write-Output "*** Please install winget manually and run this script again."
-        exit 1
+        Write-Output "*** Failed to install App Installer package, continuing without winget"
+        return $false
     }
 
     Start-Sleep -Seconds 5
@@ -231,10 +230,11 @@ function Ensure-Winget
     {
         Write-Output "*** winget still not available after installation"
         Write-Output "*** A reboot or sign-out/sign-in may be required."
-        exit 1
+        return $false
     }
 
     Write-Output "    winget installed successfully"
+    return $true
 }
 
 function Test-InternetConnectivity
@@ -260,30 +260,27 @@ function Test-InternetConnectivity
         }
         catch
         {
-            Write-Output "*** Unable to reach $uri"
-            Write-Output "*** Please verify internet connectivity and try again."
-            exit 1
+            Write-Output "*** Unable to reach $uri, continuing anyway." 
         }
     }
 }
 
+
 function Find-PyKDPyd
 {
     param(
-        [string]$SitePackagesPath
+        [string]$SitePackagesPath = "C:\Python27\Lib\site-packages"
     )
 
-    $candidates = @(
-        (Join-Path $SitePackagesPath "pykd.pyd"),
-        (Join-Path $SitePackagesPath "pykd\pykd.pyd")
-    )
-
-    foreach ($candidate in $candidates)
+    if (-not (Test-Path $SitePackagesPath -PathType Container))
     {
-        if (Test-Path $candidate -PathType Leaf)
-        {
-            return $candidate
-        }
+        return $null
+    }
+
+    $directPath = Join-Path $SitePackagesPath "pykd.pyd"
+    if (Test-Path $directPath -PathType Leaf)
+    {
+        return $directPath
     }
 
     $found = Get-ChildItem -Path $SitePackagesPath -Recurse -Filter "pykd.pyd" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -321,12 +318,19 @@ function Register-DllSilent
 
     if (-not (Test-Path $DllPath -PathType Leaf))
     {
-        Write-Output "    File not found, continuing: $DllPath"
-        return
+        if ($ContinueOnMissing)
+        {
+            Write-Output "    File not found, continuing: $DllPath"
+            return
+        }
+        else
+        {
+            Write-Output "    File not found, continuing: $DllPath"
+            return
+        }
     }
 
     $regsvr = if ($Bitness -eq "x86") { $regsvr32_32 } else { $regsvr32_64 }
-
     try
     {
         $proc = Start-Process -FilePath $regsvr -ArgumentList "`"$DllPath`" /s" -Wait -PassThru -ErrorAction Stop
@@ -338,6 +342,28 @@ function Register-DllSilent
     catch
     {
         Write-Output "    regsvr32 failed for $DllPath, continuing"
+    }
+}
+
+function Invoke-NonFatalStep
+{
+    param(
+        [string]$Description,
+        [scriptblock]$Action
+    )
+
+    try
+    {
+        & $Action
+    }
+    catch
+    {
+        Write-Output "*** Step failed: $Description"
+        if ($_.Exception -and $_.Exception.Message)
+        {
+            Write-Output "*** $($_.Exception.Message)"
+        }
+        Write-Output "*** Continuing"
     }
 }
 
@@ -356,7 +382,7 @@ Ensure-Folder $engineExt32
 Ensure-Folder $engineExt64
 Ensure-Folder $vcShared32
 
-Ensure-Winget -TempFolder $env:tempfolder
+$wingetAvailable = Ensure-Winget -TempFolder $env:tempfolder
 
 Write-Output "[+] Creating shortcut to cmd.exe on desktop (set to 'Run As Administrator')."
 
@@ -378,22 +404,48 @@ $bytes[0x15] = $bytes[0x15] -bor 0x20
 if (Test-Path $env:tempfolder -PathType Container)
 {
     Write-Output "[+] Downloading packages to temp folder"
-    Download-File -Uri $env:pythonUrl      -OutFile (Join-Path $env:tempfolder $env:pythonfile)      -Label "1. Python 2.7.18"
-    Download-File -Uri $env:windbgUrl      -OutFile (Join-Path $env:tempfolder $env:windbgfile)      -Label "2. Classic WinDBG"
-    Download-File -Uri $env:pykdExtX86Url  -OutFile (Join-Path $env:tempfolder $env:pykdExtX86File)  -Label "3. PyKD extension package (x86)"
-    Download-File -Uri $env:pykdExtX64Url  -OutFile (Join-Path $env:tempfolder $env:pykdExtX64File)  -Label "4. PyKD extension package (x64)"
-    Download-File -Uri $env:monaUrl        -OutFile (Join-Path $env:tempfolder $env:monafile)        -Label "5. mona.py"
-    Download-File -Uri $env:windbglibUrl   -OutFile (Join-Path $env:tempfolder $env:windbglibfile)   -Label "6. windbglib.py"
-    Download-File -Uri $env:vscommunityUrl -OutFile (Join-Path $env:tempfolder $env:vscommunityfile) -Label "7. Visual Studio 2017 Desktop Express"
-    Download-File -Uri $env:vcredistUrl    -OutFile (Join-Path $env:tempfolder $env:vcredistfile)    -Label "8. VC++ 2010 SP1 Redistributable (x86)"
+
+    Write-Output "    1. Python 2.7.18"
+    [void](Download-File -Uri $env:pythonUrl -OutFile (Join-Path $env:tempfolder $env:pythonfile) -Label "Downloading Python 2.7.18")
+
+    Write-Output "    2. Classic WinDBG"
+    [void](Download-File -Uri $env:windbgUrl -OutFile (Join-Path $env:tempfolder $env:windbgfile) -Label "Downloading Classic WinDBG")
+
+    Write-Output "    3. PyKD extension package (x86)"
+    [void](Download-File -Uri $env:pykdExtX86Url -OutFile (Join-Path $env:tempfolder $env:pykdExtX86File) -Label "Downloading PyKD extension package (x86)")
+
+    Write-Output "    4. PyKD extension package (x64)"
+    [void](Download-File -Uri $env:pykdExtX64Url -OutFile (Join-Path $env:tempfolder $env:pykdExtX64File) -Label "Downloading PyKD extension package (x64)")
+
+    Write-Output "    5. mona.py"
+    [void](Download-File -Uri $env:monaUrl -OutFile (Join-Path $env:tempfolder $env:monafile) -Label "Downloading mona.py")
+
+    Write-Output "    6. windbglib.py"
+    [void](Download-File -Uri $env:windbglibUrl -OutFile (Join-Path $env:tempfolder $env:windbglibfile) -Label "Downloading windbglib.py")
+
+    Write-Output "    7. Visual Studio 2017 Desktop Express"
+    [void](Download-File -Uri $env:vscommunityUrl -OutFile (Join-Path $env:tempfolder $env:vscommunityfile) -Label "Downloading Visual Studio 2017 Desktop Express")
+
+    Write-Output "    8. VC++ Redistributable (x86)"
+    [void](Download-File -Uri $env:vcredistUrl -OutFile (Join-Path $env:tempfolder $env:vcredistfile) -Label "Downloading VC++ Redistributable (x86)")
+
+    Write-Output "    9. VC++ 2010 SP1 Redistributable (x86)"
+    [void](Download-File -Uri $env:vc2010redistUrl -OutFile (Join-Path $env:tempfolder $env:vc2010redistfile) -Label "Downloading VC++ 2010 SP1 Redistributable (x86)")
+
 
     Remove-Item -Path "$env:tempfolder\pykd-ext-x86" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:tempfolder\pykd-ext-x64" -Recurse -Force -ErrorAction SilentlyContinue
-    Expand-Archive -Path (Join-Path $env:tempfolder $env:pykdExtX86File) -DestinationPath "$env:tempfolder\pykd-ext-x86" -Force
-    Expand-Archive -Path (Join-Path $env:tempfolder $env:pykdExtX64File) -DestinationPath "$env:tempfolder\pykd-ext-x64" -Force
+    Invoke-NonFatalStep "Expand PyKD extension package (x86)" {
+        Expand-Archive -Path (Join-Path $env:tempfolder $env:pykdExtX86File) -DestinationPath "$env:tempfolder\pykd-ext-x86" -Force -ErrorAction Stop
+    }
+    Invoke-NonFatalStep "Expand PyKD extension package (x64)" {
+        Expand-Archive -Path (Join-Path $env:tempfolder $env:pykdExtX64File) -DestinationPath "$env:tempfolder\pykd-ext-x64" -Force -ErrorAction Stop
+    }
 
     Write-Output "[+] Creating System Environment variable _NT_SYMBOL_PATH"
-    [Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
+    Invoke-NonFatalStep "Set _NT_SYMBOL_PATH" {
+        [Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*http://msdl.microsoft.com/download/symbols", "Machine")
+    }
 
     Write-Output "[+] Adding c:\Python27 to PATH"
     $oldpath = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).path
@@ -404,22 +456,38 @@ if (Test-Path $env:tempfolder -PathType Container)
     else
     {
         $newPath = "$oldpath;c:\Python27"
-        Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath
+        Invoke-NonFatalStep "Add c:\Python27 to PATH" {
+            Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath -ErrorAction Stop
+        }
     }
 
     Write-Output "[+] Installing software"
     Write-Output "    1. Python 2.7"
-    Start-Process (Join-Path $env:tempfolder $env:pythonfile) -Wait -ArgumentList '/quiet /passive'
+    Invoke-NonFatalStep "Install Python 2.7" {
+        Start-Process (Join-Path $env:tempfolder $env:pythonfile) -Wait -ArgumentList '/quiet /passive' -ErrorAction Stop
+    }
 
     Write-Output "       Updating pip in Python 2.7.18"
-    Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m ensurepip --default-pip'
-    Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pip'
+    Invoke-NonFatalStep "Bootstrap pip in Python 2.7.18" {
+        Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m ensurepip --default-pip' -ErrorAction Stop
+    }
+    Invoke-NonFatalStep "Upgrade pip in Python 2.7.18" {
+        Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pip' -ErrorAction Stop
+    }
 
     Write-Output "       Installing PyKD via pip in Python 2.7.18"
-    Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd'
+    Invoke-NonFatalStep "Install PyKD via pip in Python 2.7.18" {
+        Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd' -ErrorAction Stop
+    }
 
-    Write-Output "    2. VC++ 2010 SP1 Redistributable (x86)"
-    Start-Process (Join-Path $env:tempfolder $env:vcredistfile) -Wait -ArgumentList '/quiet /norestart'
+    Write-Output "    2. VC++ Redistributable (x86)"
+    Invoke-NonFatalStep "Install VC++ Redistributable (x86)" {
+        Start-Process (Join-Path $env:tempfolder $env:vcredistfile) -Wait -ArgumentList '/quiet /norestart' -ErrorAction Stop
+    }
+    Invoke-NonFatalStep "Install VC++ 2010 Redistributable (x86)" {
+        Start-Process (Join-Path $env:tempfolder $env:vc2010redistfile) -Wait -ArgumentList '/quiet /norestart' -ErrorAction Stop
+    }
+
 
     $pykdPydPath = Find-PyKDPyd -SitePackagesPath "C:\Python27\Lib\site-packages"
     if ($pykdPydPath)
@@ -458,43 +526,73 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
 
     Write-Output "    4. Registering msdia100.dll (continue if missing)"
-    Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
+    Register-DllSilent -DllPath $msdia100_32 -Bitness x86 -ContinueOnMissing
 
     Write-Output "    5. Registering msdia120.dll (continue if missing)"
     Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
 
     Write-Output "    6. WinDBG"
     Write-Output "       Hold on, this may take a while..."
-    Start-Process (Join-Path $env:tempfolder $env:windbgfile) -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q'
+    Invoke-NonFatalStep "Install WinDBG" {
+        Start-Process (Join-Path $env:tempfolder $env:windbgfile) -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q' -ErrorAction Stop
+    }
 
     Write-Output "    7. WinDBGX"
-    winget install --id Microsoft.WinDbg -e --source winget --silent --accept-package-agreements --accept-source-agreements
+    if ($wingetAvailable)
+    {
+        Invoke-NonFatalStep "Install WinDBGX" {
+            winget install --id Microsoft.WinDbg -e --source winget --silent --accept-package-agreements --accept-source-agreements
+        }
+    }
+    else
+    {
+        Write-Output "    winget not available, skipping WinDBGX"
+    }
 
     Write-Output "    8. Visual Studio Code"
-    winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
+    if ($wingetAvailable)
+    {
+        Invoke-NonFatalStep "Install Visual Studio Code" {
+            winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
+        }
+    }
+    else
+    {
+        Write-Output "    winget not available, skipping Visual Studio Code"
+    }
 
     Write-Output "    9. PyKD, windbglib and mona"
     Write-Output "       a. Installing mona.py and windbglib.py in WinDBG"
-    Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination (Join-Path $classicDbgBase 'x86') -Force
-    Copy-Item -Path (Join-Path $env:tempfolder $env:windbglibfile) -Destination (Join-Path $classicDbgBase 'x86') -Force
+    Invoke-NonFatalStep "Install mona.py and windbglib.py in WinDBG" {
+        Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination (Join-Path $classicDbgBase 'x86') -Force -ErrorAction Stop
+        Copy-Item -Path (Join-Path $env:tempfolder $env:windbglibfile) -Destination (Join-Path $classicDbgBase 'x86') -Force -ErrorAction Stop
+    }
 
-    Write-Output "       b. Installing pykd.dll in debugger extension search path x86 (EngineExtensions32)"
-    Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 'pykd.dll') -Force
+    Write-Output "       b. Installing pykd.dll in WinDBG engine/extensions x86 folder"
+    Invoke-NonFatalStep "Install pykd.dll in debugger extension search path x86 (EngineExtensions32)" {
+        Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 'pykd.dll') -Force -ErrorAction Stop
+    }
 
-    Write-Output "       c. Installing pykd.dll in debugger extension search path x64 (EngineExtensions)"
-    Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination (Join-Path $engineExt64 'pykd.dll') -Force
+    Write-Output "       c. Installing pykd.dll in WinDBG engine/extensions x64 folder"
+    Invoke-NonFatalStep "Install pykd.dll in debugger extension search path x64 (EngineExtensions)" {
+        Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination (Join-Path $engineExt64 'pykd.dll') -Force -ErrorAction Stop
+    }
 
     if (Test-Path $env:immunitypycommandsfolder -PathType Container)
     {
         Write-Output "       d. Installing mona.py in Immunity Debugger"
-        Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination $env:immunitypycommandsfolder -Force
+        Invoke-NonFatalStep "Install mona.py in Immunity Debugger" {
+            Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination $env:immunitypycommandsfolder -Force -ErrorAction Stop
+        }
 
         $monaIniPath = Join-Path $env:immunityprogramfolder "mona.ini"
 
         if (-not (Test-Path $monaIniPath -PathType Leaf))
         {
             Write-Output "       e. Creating mona.ini"
-            "workingfolder=c:\logs\%p" | Out-File -FilePath $monaIniPath -Encoding ASCII
+            Invoke-NonFatalStep "Create mona.ini" {
+                "workingfolder=c:\logs\%p" | Out-File -FilePath $monaIniPath -Encoding ASCII -ErrorAction Stop
+            }
         }
         else
         {
@@ -503,16 +601,29 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
 
     Write-Output "    10. 7Zip"
-    winget install --id 7zip.7zip -e --source winget --silent --accept-package-agreements --accept-source-agreements
+    if ($wingetAvailable)
+    {
+        Invoke-NonFatalStep "Install 7Zip" {
+            winget install --id 7zip.7zip -e --source winget --silent --accept-package-agreements --accept-source-agreements
+        }
+    }
+    else
+    {
+        Write-Output "    winget not available, skipping 7Zip"
+    }
 
     Write-Output "    11. Visual Studio 2017 Desktop Express - manual install"
-    Start-Process (Join-Path $env:tempfolder $env:vscommunityfile) -Wait
+    Invoke-NonFatalStep "Launch Visual Studio 2017 Desktop Express installer" {
+        Start-Process (Join-Path $env:tempfolder $env:vscommunityfile) -Wait -ErrorAction Stop
+    }
 
     Write-Output "[+] Launching WinDBG to check if everything is ok"
     Write-Output "    ==> Please check the WinDBG log window and confirm that:"
     Write-Output "        - the !peb command didn't produce an error message"
     Write-Output "        - the !py -2 mona command resulted in producing a list of available mona commands"
-    Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"'
+    Invoke-NonFatalStep "Launch WinDBG validation session" {
+        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
+    }
 
     Write-Output "[+] Removing temporary folder again"
     Remove-Item -Path $env:tempfolder -Recurse -Force -ErrorAction SilentlyContinue
