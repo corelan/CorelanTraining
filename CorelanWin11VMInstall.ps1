@@ -267,6 +267,34 @@ function Test-InternetConnectivity
     }
 }
 
+function Find-PyKDPyd
+{
+    param(
+        [string]$SitePackagesPath
+    )
+
+    $candidates = @(
+        (Join-Path $SitePackagesPath "pykd.pyd"),
+        (Join-Path $SitePackagesPath "pykd\pykd.pyd")
+    )
+
+    foreach ($candidate in $candidates)
+    {
+        if (Test-Path $candidate -PathType Leaf)
+        {
+            return $candidate
+        }
+    }
+
+    $found = Get-ChildItem -Path $SitePackagesPath -Recurse -Filter "pykd.pyd" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found)
+    {
+        return $found.FullName
+    }
+
+    return $null
+}
+
 function Find-Msdia140
 {
     param(
@@ -293,24 +321,23 @@ function Register-DllSilent
 
     if (-not (Test-Path $DllPath -PathType Leaf))
     {
-        if ($ContinueOnMissing)
-        {
-            Write-Output "    File not found, continuing: $DllPath"
-            return
-        }
-        else
-        {
-            Write-Output "*** File not found: $DllPath"
-            exit 1
-        }
+        Write-Output "    File not found, continuing: $DllPath"
+        return
     }
 
     $regsvr = if ($Bitness -eq "x86") { $regsvr32_32 } else { $regsvr32_64 }
-    $proc = Start-Process -FilePath $regsvr -ArgumentList "`"$DllPath`" /s" -Wait -PassThru
-    if ($proc.ExitCode -ne 0)
+
+    try
     {
-        Write-Output "*** regsvr32 failed for $DllPath (exit code $($proc.ExitCode))"
-        exit 1
+        $proc = Start-Process -FilePath $regsvr -ArgumentList "`"$DllPath`" /s" -Wait -PassThru -ErrorAction Stop
+        if ($proc.ExitCode -ne 0)
+        {
+            Write-Output "    regsvr32 failed for $DllPath (exit code $($proc.ExitCode)), continuing"
+        }
+    }
+    catch
+    {
+        Write-Output "    regsvr32 failed for $DllPath, continuing"
     }
 }
 
@@ -394,24 +421,47 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    2. VC++ 2010 SP1 Redistributable (x86)"
     Start-Process (Join-Path $env:tempfolder $env:vcredistfile) -Wait -ArgumentList '/quiet /norestart'
 
-    $msdia140Source = Find-Msdia140 -SearchRoot "C:\Python27"
-    if ($msdia140Source)
+    $pykdPydPath = Find-PyKDPyd -SitePackagesPath "C:\Python27\Lib\site-packages"
+    if ($pykdPydPath)
     {
-        Write-Output "    3. Copying msdia140.dll to $vcShared32"
-        Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force
-        Write-Output "       Registering msdia140.dll"
-        Register-DllSilent -DllPath $msdia140Target -Bitness x86
+        $pykdSitePackagesFolder = Split-Path -Parent $pykdPydPath
+        $msdia140Source = Join-Path $pykdSitePackagesFolder "msdia140.dll"
+        if (-not (Test-Path $msdia140Source -PathType Leaf))
+        {
+            $msdia140Source = Find-Msdia140 -SearchRoot $pykdSitePackagesFolder
+        }
     }
     else
     {
-        Write-Output "    3. msdia140.dll not found under C:\Python27, skipping"
+        $pykdSitePackagesFolder = "C:\Python27\Lib\site-packages"
+        $msdia140Source = Find-Msdia140 -SearchRoot $pykdSitePackagesFolder
+    }
+
+    if ($msdia140Source -and (Test-Path $msdia140Source -PathType Leaf))
+    {
+        Write-Output "    3. Copying msdia140.dll to $vcShared32"
+        try
+        {
+            Ensure-Folder $vcShared32
+            Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force -ErrorAction Stop
+            Write-Output "       Registering msdia140.dll"
+            Register-DllSilent -DllPath $msdia140Target -Bitness x86 -ContinueOnMissing
+        }
+        catch
+        {
+            Write-Output "       Failed to copy/register msdia140.dll, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "    3. msdia140.dll not found in site-packages, skipping"
     }
 
     Write-Output "    4. Registering msdia100.dll (continue if missing)"
     Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
 
-    Write-Output "    5. Registering msdia120.dll"
-    Register-DllSilent -DllPath $msdia120_32 -Bitness x86
+    Write-Output "    5. Registering msdia120.dll (continue if missing)"
+    Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
 
     Write-Output "    6. WinDBG"
     Write-Output "       Hold on, this may take a while..."
