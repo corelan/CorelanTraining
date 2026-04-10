@@ -109,6 +109,8 @@ function Ensure-Admin
     }
 }
 
+
+
 function Download-File
 {
     param(
@@ -368,6 +370,16 @@ function Invoke-NonFatalStep
 }
 
 ### MAIN ROUTINE ###
+
+# Check if system is Windows 10 or later
+
+$ver = [System.Environment]::OSVersion.Version
+
+if ($ver.Major -lt 10) {
+    Write-Output "This script is designed to run on Windows 10 and later"
+    exit 1
+}
+
 
 Ensure-Admin
 

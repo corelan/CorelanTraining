@@ -129,6 +129,15 @@ def is_admin():
     except Exception:
         return False
 
+def ensure_windows7():
+    try:
+        ver = sys.getwindowsversion()
+        if not (ver[0] == 6 and ver[1] == 1):
+            abort("This script is designed to run on Windows 7 only")
+            sys.exit(1)
+    except Exception as e:
+        abort("%s" % str(e))
+        sys.exit(1)
 
 def confirm_continue(message):
     while True:
@@ -812,6 +821,8 @@ def cleanup():
 def main():
     if os.name != "nt":
         abort("This script must be run on Windows.")
+
+    ensure_windows7()        
 
     if not is_admin():
         abort("This script must be run as Administrator.")
