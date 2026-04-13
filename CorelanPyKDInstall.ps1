@@ -16,9 +16,11 @@ $ErrorActionPreference = "Stop"
 $env:tempfolder                = "C:\corelantemp"
 $env:python32installer         = "python-3.9.13.exe"
 $env:python64installer         = "python-3.9.13-amd64.exe"
+$env:vc2010redistfile          = "vc2010_runtime_redist_x86.exe"
 
 $python32Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
 $python64Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
+$vc2010redistUrl               = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
 $pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
 $pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 
@@ -496,26 +498,10 @@ function Install-PyKD32
 
 function Install-VCRuntime2010
 {
-    Write-Host "[*] Installing VC++ 2010 SP1 x86..."
-
-    try {
-        $proc = Start-Process -FilePath "$env:tempfolder\vcredist_x86.exe" -ArgumentList "/quiet /norestart" -Wait -PassThru
-        if ($proc.ExitCode -ne 0) {
-            Write-Warning "VC++ 2010 x86 installer returned exit code $($proc.ExitCode). Continuing anyway..."
-        }
-    } catch {
-        Write-Warning "VC++ 2010 x86 installation failed. Continuing anyway..."
-    }
-
-    Write-Host "[*] Installing VC++ 2010 SP1 x64..."
-
-    try {
-        $proc = Start-Process -FilePath "$env:tempfolder\vcredist_x64.exe" -ArgumentList "/quiet /norestart" -Wait -PassThru
-        if ($proc.ExitCode -ne 0) {
-            Write-Warning "VC++ 2010 x64 installer returned exit code $($proc.ExitCode). Continuing anyway..."
-        }
-    } catch {
-        Write-Warning "VC++ 2010 x64 installation failed. Continuing anyway..."
+    Write-Output "[+] Installing VC++ 2010 SP1 Redistributable (x86)"
+    
+    Invoke-NonFatalStep "Install VC++ 2010 Redistributable (x86)" {
+        Start-Process (Join-Path $env:tempfolder $env:vc2010redistfile) -Wait -ArgumentList '/quiet /norestart' -ErrorAction Stop
     }
 }
 
@@ -612,6 +598,15 @@ function Install-PyKDExtensions
 
 Ensure-Admin
 
+# Check if system is Windows 10 or later
+
+$ver = [System.Environment]::OSVersion.Version
+
+if ($ver.Major -lt 10) {
+    Write-Output "This script is designed to run on Windows 10 and later"
+    exit 1
+}
+
 
 Write-Host "*** -->> Make sure you have an active internet connection before proceeding! <<-- ***"
 Confirm-Continue
@@ -633,6 +628,7 @@ Validate-WingetPythonSources -StageDescription "before Python install"
 Write-Output "[+] Downloading installers"
 Download-File -Uri $python32Url      -OutFile (Join-Path $env:tempfolder $env:python32installer)     -Label "1. Python 3.9.13 32-bit"
 Download-File -Uri $python64Url      -OutFile (Join-Path $env:tempfolder $env:python64installer)     -Label "2. Python 3.9.13 64-bit"
+Download-File -Uri $vc2010redistUrl  -OutFile (Join-Path $env:tempfolder $env:vc2010redistfile)    -Label "3. VC++ 2010 SP1 Redistributable (x86)"
 
 Install-Python39
 Install-VCRuntime2010
