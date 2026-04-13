@@ -731,6 +731,7 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "[+] All set"
     Write-Output ""
     Write-Output "[+] Mona usage:"
+    Write-Output ""
     Write-Output "    In WinDBG(X) run:"
     Write-Output ""
     Write-Output "      !load pykd"
@@ -740,6 +741,7 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    After that you can simply run '!mona' at the WinDBG(X) command line."
     Write-Output ""
     Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
+    Write-Output ""    
 }
 else
 {
