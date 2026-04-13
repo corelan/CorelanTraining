@@ -89,6 +89,90 @@ function Ensure-Folder($path)
     }
 }
 
+function Get-WinDbgProgramFolder
+{
+    $programFilesX86 = ${env:ProgramFiles(x86)}
+    if (-not $programFilesX86)
+    {
+        return $null
+    }
+
+    $kitsRoot = Join-Path $programFilesX86 "Windows Kits"
+    if (-not (Test-Path $kitsRoot -PathType Container))
+    {
+        return $null
+    }
+
+    $kitRoots = Get-ChildItem -Path $kitsRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName "Debuggers") }
+
+    if (-not $kitRoots)
+    {
+        return $null
+    }
+
+    $kitRoots = $kitRoots | Sort-Object {
+        $versionText = $_.Name -replace '[^0-9\.]', ''
+        try { [version]$versionText } catch { [version]'0.0' }
+    } -Descending
+
+    foreach ($kit in $kitRoots)
+    {
+        $debuggers = Join-Path $kit.FullName "Debuggers"
+        if (Test-Path $debuggers -PathType Container)
+        {
+            return $debuggers
+        }
+    }
+
+    return $null
+}
+
+function Create-SymbolicLinkDirectory
+{
+    param(
+        [string]$LinkPath,
+        [string]$TargetPath
+    )
+
+    if (Test-Path $LinkPath)
+    {
+        Remove-Item -Path $LinkPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Ensure-Folder (Split-Path -Parent $LinkPath)
+    Ensure-Folder $TargetPath
+
+    $arguments = "/c mklink /D `"$LinkPath`" `"$TargetPath`""
+    Start-Process -FilePath $cmdPath -ArgumentList $arguments -NoNewWindow -Wait -ErrorAction Stop
+}
+
+function Create-SymbolicLinkFile
+{
+    param(
+        [string]$LinkPath,
+        [string]$TargetPath
+    )
+
+    if (Test-Path $LinkPath)
+    {
+        $item = Get-Item $LinkPath
+        if ($item.LinkType -ne "SymbolicLink")
+        {
+            Remove-Item -Path $LinkPath -Force -ErrorAction SilentlyContinue
+        }
+        else
+        {
+            Remove-Item -Path $LinkPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    Ensure-Folder (Split-Path -Parent $LinkPath)
+
+    $arguments = "/c mklink `"$LinkPath`" `"$TargetPath`""
+    Start-Process -FilePath $cmdPath -ArgumentList $arguments -NoNewWindow -Wait -ErrorAction Stop
+}
+
 function Ensure-Admin
 {
     Write-Output "[+] Testing if we have admin privileges"
@@ -574,10 +658,12 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
 
     Write-Output "    9. PyKD, windbglib and mona"
-    Write-Output "       a. Installing mona.py and windbglib.py in WinDBG"
-    Invoke-NonFatalStep "Install mona.py and windbglib.py in WinDBG" {
-        Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination (Join-Path $classicDbgBase 'x86') -Force -ErrorAction Stop
-        Copy-Item -Path (Join-Path $env:tempfolder $env:windbglibfile) -Destination (Join-Path $classicDbgBase 'x86') -Force -ErrorAction Stop
+    Write-Output "       a. Installing mona.py and windbglib.py in C:\Tools\mona"
+    Invoke-NonFatalStep "Install mona.py and windbglib.py in C:\Tools\mona" {
+        $toolsMonaFolder = "C:\Tools\mona"
+        Ensure-Folder $toolsMonaFolder
+        Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination $toolsMonaFolder -Force -ErrorAction Stop
+        Copy-Item -Path (Join-Path $env:tempfolder $env:windbglibfile) -Destination $toolsMonaFolder -Force -ErrorAction Stop
     }
 
     Write-Output "       b. Installing pykd.dll in WinDBG engine/extensions x86 folder"
@@ -592,9 +678,11 @@ if (Test-Path $env:tempfolder -PathType Container)
 
     if (Test-Path $env:immunitypycommandsfolder -PathType Container)
     {
-        Write-Output "       d. Installing mona.py in Immunity Debugger"
-        Invoke-NonFatalStep "Install mona.py in Immunity Debugger" {
-            Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination $env:immunitypycommandsfolder -Force -ErrorAction Stop
+        Write-Output "       d. Creating mona.py symlink in Immunity Debugger"
+        Invoke-NonFatalStep "Create mona.py symlink in Immunity Debugger" {
+            $monaPyPath = Join-Path $env:immunitypycommandsfolder "mona.py"
+            $toolsMonaPy = "C:\\Tools\\mona\\mona.py"
+            Create-SymbolicLinkFile -LinkPath $monaPyPath -TargetPath $toolsMonaPy
         }
 
         $monaIniPath = Join-Path $env:immunityprogramfolder "mona.ini"
@@ -632,15 +720,24 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "[+] Launching WinDBG to check if everything is ok"
     Write-Output "    ==> Please check the WinDBG log window and confirm that:"
     Write-Output "        - the !peb command didn't produce an error message"
-    Write-Output "        - the !py -2 mona command resulted in producing a list of available mona commands"
+    Write-Output "        - the !py -2 C:\Tools\mona\\mona.py command resulted in a list of available mona commands"
     Invoke-NonFatalStep "Launch WinDBG validation session" {
-        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 mona config -set workingfolder c:\logs\%p; !peb; !py -2 mona" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
+        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 C:\Tools\mona\mona.py config -set workingfolder c:\logs\%p; !peb; !py -2 C:\Tools\mona\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
     }
 
     Write-Output "[+] Removing temporary folder again"
     Remove-Item -Path $env:tempfolder -Recurse -Force -ErrorAction SilentlyContinue
     Write-Output ""
     Write-Output "[+] All set"
+    Write-Output ""
+    Write-Output "[+] Mona usage:"
+    Write-Output "    In WinDBG(X) run:"
+    Write-Output ""
+    Write-Output "      !load pykd"
+    Write-Output "      as !mona !py -2 C:\Tools\mona\mona.py"
+    Write-Output ""
+    Write-Output "    Or run windbg.exe (windbgx.exe) with argument -c \"!load pykd; as !mona !py -2 C:\Tools\mona\mona.py \""
+    Write-Output "    After that you can simply run '!mona' at the WinDBG(X) command line."
     Write-Output ""
     Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
 }
