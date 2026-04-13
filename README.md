@@ -2,7 +2,7 @@ This repository contains a few Powershell and Python scripts:
 
 1. `CorelanWin11VMInstall.ps1`: Will help you set up & configure a Windows 11 VM, in preparation for [Corelan Windows Exploit Development Training](https://www.corelan-training.com)
 
-2. `CorelanPyKDInstall.ps1`: This script installs and configures the necessary componetns to run Python3 / PyKD / PyKD-Ext in WinDBG(x), for both 32bit and 64bit, on Windows 10/11 
+2. `CorelanPyKDInstall.ps1`: This script installs and configures the necessary components to run Python3 / PyKD / PyKD-Ext in WinDBG(x), for both 32bit and 64bit, on Windows 10/11 
 
 3. `CorelanWin7VMinstall.py`: This python script will install the necessary components to run PyKD/PyKD-Ext scripts on a Windows 7 VM. This scripts requires a working instance of Python 2.7.18
 

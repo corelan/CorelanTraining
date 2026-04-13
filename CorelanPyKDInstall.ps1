@@ -603,7 +603,7 @@ Ensure-Admin
 $ver = [System.Environment]::OSVersion.Version
 
 if ($ver.Major -lt 10) {
-    Write-Output "This script is designed to run on Windows 10 and later"
+    Write-Output "*** This script is designed to run on Windows 10 and later ***"
     exit 1
 }
 
