@@ -454,6 +454,28 @@ function Register-DllSilent
     }
 }
 
+function Invoke-NonFatalStep
+{
+    param(
+        [string]$Description,
+        [scriptblock]$Action
+    )
+
+    try
+    {
+        & $Action
+    }
+    catch
+    {
+        Write-Output "*** Step failed: $Description"
+        if ($_.Exception -and $_.Exception.Message)
+        {
+            Write-Output "*** $($_.Exception.Message)"
+        }
+        Write-Output "*** Continuing"
+    }
+}
+
 function Install-Python39
 {
     Write-Output "[+] Installing Python 3.9.13 (32-bit and 64-bit)"
@@ -523,25 +545,35 @@ function Install-PyKD64
 
 function Install-Python27PyKD
 {
-    $python27Root    = "C:\Python27"
-    $python27Scripts = Join-Path $python27Root "Scripts"
-    $pipExe          = Join-Path $python27Scripts "pip.exe"
+    $python27Root = "C:\Python27"
+    $pythonExe = Join-Path $python27Root "python.exe"
 
-    Write-Output "[+] Checking for Python 2.7.18 at $python27Root"
+    Write-Output "[+] Checking for Python 2.7 at $python27Root"
 
     if (-not (Test-Path $python27Root -PathType Container))
     {
-        Write-Output "    Python 2.7.18 not found at $python27Root, skipping"
+        Write-Output "    Python 2.7 not found at $python27Root, skipping"
         return
     }
 
-    if (-not (Test-Path $pipExe -PathType Leaf))
+    if (-not (Test-Path $pythonExe -PathType Leaf))
     {
-        Write-Output "*** Python 2.7 was found at $python27Root, but $pipExe does not exist"
-        exit 1
+        Write-Output "    python.exe not found at $pythonExe, skipping"
+        return
     }
 
-    Run-ProcessChecked -FilePath $pipExe -Arguments "install pykd" -Description "Installing PyKD with pip for Python 2.7"
+    Write-Output "       Updating pip in Python 2.7"
+    Invoke-NonFatalStep "Bootstrap pip in Python 2.7" {
+        Start-Process $pythonExe -Wait -ArgumentList '-m ensurepip --default-pip' -ErrorAction Stop
+    }
+    Invoke-NonFatalStep "Upgrade pip in Python 2.7" {
+        Start-Process $pythonExe -Wait -ArgumentList '-m pip install --upgrade pip' -ErrorAction Stop
+    }
+
+    Write-Output "       Installing PyKD via pip in Python 2.7"
+    Invoke-NonFatalStep "Install PyKD via pip in Python 2.7" {
+        Start-Process $pythonExe -Wait -ArgumentList '-m pip install --upgrade pykd' -ErrorAction Stop
+    }
 }
 
 function Install-PyKDExtensions
