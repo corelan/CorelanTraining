@@ -681,7 +681,7 @@ if (Test-Path $env:tempfolder -PathType Container)
         Write-Output "       d. Creating mona.py symlink in Immunity Debugger"
         Invoke-NonFatalStep "Create mona.py symlink in Immunity Debugger" {
             $monaPyPath = Join-Path $env:immunitypycommandsfolder "mona.py"
-            $toolsMonaPy = "C:\Tools\mona\mona.py"
+            $toolsMonaPy = "C:\Tools\mona3\mona.py"
             Create-SymbolicLinkFile -LinkPath $monaPyPath -TargetPath $toolsMonaPy
         }
 
@@ -720,9 +720,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "[+] Launching WinDBG to check if everything is ok"
     Write-Output "    ==> Please check the WinDBG log window and confirm that:"
     Write-Output "        - the !peb command didn't produce an error message"
-    Write-Output "        - the !py -2 C:\Tools\mona\mona.py command resulted in a list of available mona commands"
+    Write-Output "        - the !py -2 C:\Tools\mona3\mona.py command resulted in a list of available mona commands"
     Invoke-NonFatalStep "Launch WinDBG validation session" {
-        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 C:\Tools\mona\mona.py config -set workingfolder c:\logs\%p; !peb; !py -2 C:\Tools\mona\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
+        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 C:\Tools\mona3\mona.py config -set workingfolder c:\logs\%p; !peb; !py -2 C:\Tools\mona3\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
     }
 
     Write-Output "[+] Removing temporary folder again"
@@ -735,9 +735,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    In WinDBG(X) run:"
     Write-Output ""
     Write-Output "      !load pykd"
-    Write-Output "      as !mona !py -2 C:\Tools\mona\mona.py"
+    Write-Output "      as !mona !py -2 C:\Tools\mona3\mona.py"
     Write-Output ""
-    Write-Output '    Or run windbg.exe (windbgx.exe) with argument -c "!load pykd; as !mona !py -2 C:\Tools\mona\mona.py"'
+    Write-Output '    Or run windbg.exe (windbgx.exe) with argument -c "!load pykd; as !mona !py -2 C:\Tools\mona3\mona.py"'
     Write-Output "    After that you can simply run '!mona' at the WinDBG(X) command line."
     Write-Output ""
     Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"
