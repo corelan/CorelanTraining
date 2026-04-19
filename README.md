@@ -35,6 +35,7 @@ Make sure to run scripts from an administrator prompt!!
 <h2> CorelanPyKDInstall.ps1 </h2>
 
 This second script will install Python3.9 and a PyKD + pykd-ext version that is compatible with Python3 and Python2.
+It will also install the keystone-engine library for Python 3.9 specifically.
 
 Please keep in mind that this script will break existing legacy mona.py installations that are based on PyKD 0.2.0.x and Python2
 

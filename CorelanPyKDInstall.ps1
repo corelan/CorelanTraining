@@ -495,11 +495,11 @@ function Upgrade-Pip
     Run-ProcessChecked -FilePath "py" -Arguments "-3.9-64 -m pip install --upgrade pip" -Description "Updating pip for Python 3.9 64-bit"
 }
 
-function Install-Capstone
+function Install-Keystone-engine
 {
-    Write-Output "[+] Installing capstone"
-    #Run-ProcessChecked -FilePath "py" -Arguments "-3.9-32 -m pip install capstone" -Description "Installing capstone for Python 3.9 32-bit"
-    Run-ProcessChecked -FilePath "py" -Arguments "-3.9-64 -m pip install capstone" -Description "Installing capstone for Python 3.9 64-bit"
+    Write-Output "[+] Installing Keystone-Engine"
+    Run-ProcessChecked -FilePath "py" -Arguments "-3.9-32 -m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 32-bit"
+    Run-ProcessChecked -FilePath "py" -Arguments "-3.9-64 -m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 64-bit"
 }
 
 function Install-PyKD32
@@ -679,7 +679,7 @@ Install-PyKD32
 Install-PyKD64
 Install-Python27PyKD
 Install-PyKDExtensions
-Install-Capstone
+Install-Keystone-engine
 
 Write-Output "[+] Removing temporary folder again"
 Remove-Item -Path $env:tempfolder -Recurse -Force -ErrorAction SilentlyContinue
