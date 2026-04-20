@@ -664,7 +664,8 @@ def run_pip_for_python(python_exe):
                 "Updating pip for {0}".format(python_exe))
     run_checked([python_exe, "-m", "pip", "install", "pykd"],
                 "Installing pykd for {0}".format(python_exe))
-
+    run_checked([python_exe, "-m", "pip", "install", "keystone-engine"],
+                "Installing keystone-engine for {0}".format(python_exe))
 
 def upgrade_pip_and_install_pykd():
     targets = [
@@ -842,7 +843,7 @@ def main():
     safe_step("Installing .Net Framework", install_dotnetframework_48)
     safe_step("Installing Python 2.7.18 x86/x64", install_python27)
     safe_step("Installing Python 3.8.10 x86/x64", install_python38)
-    safe_step("Updating pip and installing pykd", upgrade_pip_and_install_pykd)
+    safe_step("Updating pip and installing pykd and keystone-engine", upgrade_pip_and_install_pykd)
 
     windbg_root = detect_windbg_root()
     if windbg_root:
