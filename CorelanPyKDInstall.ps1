@@ -119,29 +119,113 @@ function Download-File
         Remove-Item $OutFile -Force
     }
 
-    # Try curl first
-    $curl = "$env:SystemRoot\System32\curl.exe"
-
-    if (Test-Path $curl)
+    function Test-DownloadedFile([string]$Path)
     {
-        & $curl -L --fail -o $OutFile $Uri
-        if ($LASTEXITCODE -eq 0)
+        if (-not (Test-Path $Path -PathType Leaf))
         {
-            return
+            return $false
+        }
+        return ((Get-Item $Path).Length -gt 0)
+    }
+
+    function Invoke-WebRequestCompat([string]$RequestUri, [string]$RequestOutFile)
+    {
+        $iwr = Get-Command Invoke-WebRequest -ErrorAction Stop
+        if ($iwr.Parameters.ContainsKey('UseBasicParsing'))
+        {
+            Invoke-WebRequest -Uri $RequestUri -OutFile $RequestOutFile -UseBasicParsing -ErrorAction Stop
+        }
+        else
+        {
+            Invoke-WebRequest -Uri $RequestUri -OutFile $RequestOutFile -ErrorAction Stop
         }
     }
 
-    # Fallback to BITS
+    # Ensure TLS 1.2 where applicable (older Windows / .NET defaults can be too old for modern HTTPS)
     try
     {
-        Start-BitsTransfer -Source $Uri -Destination $OutFile
-        return
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    }
+    catch { }
+
+    $errors = @()
+
+    # 1) Try curl.exe (real binary, not the PowerShell alias)
+    $curl = "$env:SystemRoot\System32\curl.exe"
+    if (Test-Path $curl)
+    {
+        $curlArgs = @('-L', '--fail', '--silent', '--show-error', '--retry', '3', '--retry-delay', '2', '-o', $OutFile, $Uri)
+        $curlOutput = & $curl @curlArgs 2>&1
+        if ($LASTEXITCODE -eq 0 -and (Test-DownloadedFile $OutFile))
+        {
+            return
+        }
+        $errors += "curl.exe failed (exit $LASTEXITCODE)"
+        if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
+    }
+
+    # 2) Fallback to Invoke-WebRequest
+    try
+    {
+        Invoke-WebRequestCompat -RequestUri $Uri -RequestOutFile $OutFile
+        if (Test-DownloadedFile $OutFile)
+        {
+            return
+        }
+        throw "Downloaded file is missing or empty"
     }
     catch
     {
-        Write-Output "*** Download failed with curl and BITS"
-        exit 1
+        $errors += "Invoke-WebRequest failed: $($_.Exception.Message)"
+        if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
     }
+
+    # 3) Fallback to BITS (if available)
+    try
+    {
+        if (Get-Command Start-BitsTransfer -ErrorAction SilentlyContinue)
+        {
+            Start-BitsTransfer -Source $Uri -Destination $OutFile -ErrorAction Stop
+            if (Test-DownloadedFile $OutFile)
+            {
+                return
+            }
+            throw "Downloaded file is missing or empty"
+        }
+        else
+        {
+            $errors += "BITS not available (Start-BitsTransfer missing)"
+        }
+    }
+    catch
+    {
+        $errors += "BITS failed: $($_.Exception.Message)"
+        if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
+    }
+
+    # 4) Last resort: .NET WebClient
+    try
+    {
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($Uri, $OutFile)
+        if (Test-DownloadedFile $OutFile)
+        {
+            return
+        }
+        throw "Downloaded file is missing or empty"
+    }
+    catch
+    {
+        $errors += "WebClient failed: $($_.Exception.Message)"
+        if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
+    }
+
+    Write-Output "*** Download failed: $Uri"
+    foreach ($err in $errors)
+    {
+        Write-Output "    $err"
+    }
+    exit 1
 }
 
 function Ensure-Winget
