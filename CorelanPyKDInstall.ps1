@@ -155,12 +155,47 @@ function Download-File
     if (Test-Path $curl)
     {
         $curlArgs = @('-L', '--fail', '--silent', '--show-error', '--retry', '3', '--retry-delay', '2', '-o', $OutFile, $Uri)
+
         $curlOutput = & $curl @curlArgs 2>&1
-        if ($LASTEXITCODE -eq 0 -and (Test-DownloadedFile $OutFile))
+        $curlExit = $LASTEXITCODE
+        if ($curlExit -eq 0 -and (Test-DownloadedFile $OutFile))
         {
             return
         }
-        $errors += "curl.exe failed (exit $LASTEXITCODE)"
+
+        $curlText = ($curlOutput | Out-String)
+        $revocationError =
+            ($curlText -match 'revocation') -or
+            ($curlText -match '0x80092012') -or
+            ($curlText -match 'CERT_TRUST_REVOCATION_STATUS_UNKNOWN') -or
+            ($curlText -match 'schannel')
+
+        if ($revocationError)
+        {
+            if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
+            $curlNoRevokeArgs = @('-L', '--fail', '--silent', '--show-error', '--retry', '3', '--retry-delay', '2', '--ssl-no-revoke', '-o', $OutFile, $Uri)
+            $curlNoRevokeOutput = & $curl @curlNoRevokeArgs 2>&1
+            $curlNoRevokeExit = $LASTEXITCODE
+            if ($curlNoRevokeExit -eq 0 -and (Test-DownloadedFile $OutFile))
+            {
+                return
+            }
+
+            $curlNoRevokeText = ($curlNoRevokeOutput | Out-String)
+            if ($curlNoRevokeText -match 'unknown option' -or $curlNoRevokeText -match 'is unknown')
+            {
+                $errors += "curl.exe failed (exit $curlExit): certificate revocation check failed; --ssl-no-revoke unsupported by this curl.exe"
+            }
+            else
+            {
+                $errors += "curl.exe failed (exit $curlNoRevokeExit): certificate revocation check failed; retry with --ssl-no-revoke did not succeed"
+            }
+        }
+        else
+        {
+            $errors += "curl.exe failed (exit $curlExit)"
+        }
+
         if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
     }
 

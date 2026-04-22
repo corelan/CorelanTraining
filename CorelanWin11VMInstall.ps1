@@ -225,11 +225,30 @@ function Download-File
 
     if (Test-Path $curl)
     {
-        # -s: hide progress meter, -S: show errors when -s is used
-        & $curl -sS -L --fail -o $OutFile $Uri
-        if ($LASTEXITCODE -eq 0)
+        $curlArgs = @('-sS', '-L', '--fail', '--retry', '3', '--retry-delay', '2', '-o', $OutFile, $Uri)
+        $curlOutput = & $curl @curlArgs 2>&1
+        $curlExit = $LASTEXITCODE
+        if ($curlExit -eq 0)
         {
             return $true
+        }
+
+        $curlText = ($curlOutput | Out-String)
+        $revocationError =
+            ($curlText -match 'revocation') -or
+            ($curlText -match '0x80092012') -or
+            ($curlText -match 'CERT_TRUST_REVOCATION_STATUS_UNKNOWN') -or
+            ($curlText -match 'schannel')
+
+        if ($revocationError)
+        {
+            if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
+            $curlNoRevokeArgs = @('-sS', '-L', '--fail', '--retry', '3', '--retry-delay', '2', '--ssl-no-revoke', '-o', $OutFile, $Uri)
+            & $curl @curlNoRevokeArgs *>$null
+            if ($LASTEXITCODE -eq 0)
+            {
+                return $true
+            }
         }
     }
 
