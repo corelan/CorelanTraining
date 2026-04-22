@@ -14,6 +14,8 @@
 
 $env:tempfolder = "c:\corelantemp"
 $env:pythonfile = "python-2.7.18.msi"
+$env:python32installer = "python-3.9.13.exe"
+$env:python64installer = "python-3.9.13-amd64.exe"
 $env:windbgfile = "winsdksetup.exe"
 $env:vscommunityfile = "vs_WDExpress.exe"
 $env:vcredistfile = "vcredist_x86.exe"
@@ -23,12 +25,14 @@ $env:windbglibfile = "windbglib.py"
 $env:pykdExtX86File = "pykd-ext-x86.zip"
 $env:pykdExtX64File = "pykd-ext-x64.zip"
 $env:pythonUrl = "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi"
+$env:python32Url = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
+$env:python64Url = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
 $env:windbgUrl = "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409"
 $env:vscommunityUrl = "https://aka.ms/vs/15/release/vs_WDExpress.exe"
 $env:vcredistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe"
 $env:vc2010redistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
-$env:monaUrl = "https://github.com/corelan/mona/raw/master/mona.py"
-$env:windbglibUrl = "https://github.com/corelan/windbglib/raw/master/windbglib.py"
+$env:monaUrl = "https://www.corelan.be/mona3/mona.py"
+$env:windbglibUrl = "https://www.corelan.be/mona3/windbglib.py"
 $env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
 $env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
@@ -37,9 +41,16 @@ $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands
 $classicDbgBase = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
 $engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
+$userExtensions = Join-Path $env:USERPROFILE "AppData\dbg\UserExtensions"
+$python32Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python39-32"
+$python64Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python39"
+$python32Exe = Join-Path $python32Root "python.exe"
+$python64Exe = Join-Path $python64Root "python.exe"
 $vcShared32 = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
+$vcShared64 = "C:\Program Files\Common Files\Microsoft Shared\VC"
 $msdia140Target = Join-Path $vcShared32 "msdia140.dll"
 $msdia100_32 = Join-Path $vcShared32 "msdia100.dll"
+$msdia100_64 = Join-Path $vcShared64 "msdia100.dll"
 $msdia120_32 = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\msdia120.dll"
 $regsvr32_64 = "$env:WINDIR\System32\regsvr32.exe"
 $regsvr32_32 = "$env:WINDIR\SysWOW64\regsvr32.exe"
@@ -214,7 +225,8 @@ function Download-File
 
     if (Test-Path $curl)
     {
-        & $curl -L --fail -o $OutFile $Uri
+        # -s: hide progress meter, -S: show errors when -s is used
+        & $curl -sS -L --fail -o $OutFile $Uri
         if ($LASTEXITCODE -eq 0)
         {
             return $true
@@ -453,6 +465,296 @@ function Invoke-NonFatalStep
     }
 }
 
+function Remove-FileIfExists($path)
+{
+    if (Test-Path $path -PathType Leaf)
+    {
+        Remove-Item -Path $path -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-ExistingPyKD
+{
+    Write-Output "[+] Removing existing PyKD files (best effort)"
+
+    $paths = @(
+        (Join-Path $classicDbgBase "x86\\winext\\pykd.pyd"),
+        (Join-Path $classicDbgBase "x64\\winext\\pykd.pyd"),
+        (Join-Path $engineExt64 "pykd.pyd"),
+        (Join-Path $engineExt32 "pykd.pyd"),
+        (Join-Path $engineExt64 "pykd.dll"),
+        (Join-Path $engineExt32 "pykd.dll"),
+        (Join-Path $userExtensions "pykd.pyd"),
+        (Join-Path $userExtensions "pykd.dll")
+    )
+
+    foreach ($path in $paths)
+    {
+        Remove-FileIfExists $path
+    }
+}
+
+function Run-ProcessChecked
+{
+    param(
+        [string]$FilePath,
+        [string]$Arguments,
+        [string]$Description
+    )
+
+    Write-Output "       $Description"
+    $proc = Start-Process -FilePath $FilePath -ArgumentList $Arguments -Wait -PassThru -ErrorAction Stop
+    if ($proc.ExitCode -ne 0)
+    {
+        throw "$Description failed with exit code $($proc.ExitCode)"
+    }
+}
+
+function Test-PythonModuleInstalled
+{
+    param(
+        [string]$PythonExe,
+        [string]$ModuleName
+    )
+
+    if (-not (Test-Path $PythonExe -PathType Leaf))
+    {
+        return $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ModuleName))
+    {
+        return $false
+    }
+
+    try
+    {
+        & $PythonExe -c "import $ModuleName" 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    }
+    catch
+    {
+        return $false
+    }
+}
+
+function Install-Python39
+{
+    Write-Output "    2. Python 3.9.13 (32-bit and 64-bit)"
+
+    $python32Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python32Root + '"'
+    $python64Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python64Root + '"'
+
+    if (-not (Test-Path $python32Exe -PathType Leaf))
+    {
+        try
+        {
+            Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python32installer) -Arguments $python32Args -Description "Installing Python 3.9.13 32-bit"
+        }
+        catch
+        {
+            Write-Output "*** Python 3.9.13 32-bit install failed, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 32-bit already present, skipping"
+    }
+
+    if (-not (Test-Path $python64Exe -PathType Leaf))
+    {
+        try
+        {
+            Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python64installer) -Arguments $python64Args -Description "Installing Python 3.9.13 64-bit"
+        }
+        catch
+        {
+            Write-Output "*** Python 3.9.13 64-bit install failed, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 64-bit already present, skipping"
+    }
+}
+
+function Upgrade-Pip39
+{
+    Write-Output "       Updating pip in Python 3.9 (x86/x64)"
+
+    if (Test-Path $python32Exe -PathType Leaf)
+    {
+        try
+        {
+            Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 32-bit"
+        }
+        catch
+        {
+            Write-Output "*** pip upgrade failed for Python 3.9 32-bit, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 32-bit not found, skipping pip upgrade"
+    }
+
+    if (Test-Path $python64Exe -PathType Leaf)
+    {
+        try
+        {
+            Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 64-bit"
+        }
+        catch
+        {
+            Write-Output "*** pip upgrade failed for Python 3.9 64-bit, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 64-bit not found, skipping pip upgrade"
+    }
+}
+
+function Install-PyKD39
+{
+    Write-Output "       Installing PyKD via pip in Python 3.9 (x86/x64)"
+
+    if (Test-Path $python32Exe -PathType Leaf)
+    {
+        try
+        {
+            if (Test-PythonModuleInstalled -PythonExe $python32Exe -ModuleName "pykd")
+            {
+                Write-Output "       PyKD already present for Python 3.9 32-bit, skipping pip install"
+            }
+            else
+            {
+                Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install pykd" -Description "Installing PyKD for Python 3.9 32-bit"
+            }
+        }
+        catch
+        {
+            Write-Output "*** PyKD install failed for Python 3.9 32-bit, continuing"
+        }
+
+        try
+        {
+            Ensure-Folder $engineExt32
+            Ensure-Folder $vcShared32
+
+            $msdia140Source = Find-Msdia140 -SearchRoot $python32Root
+            if ($msdia140Source)
+            {
+                Write-Output "       Copying msdia140.dll to $vcShared32"
+                Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force -ErrorAction Stop
+                Write-Output "       Registering msdia140.dll"
+                Register-DllSilent -DllPath $msdia140Target -Bitness x86 -ContinueOnMissing
+            }
+            else
+            {
+                Write-Output "       Unable to locate msdia140.dll for Python 3.9 32-bit, continuing"
+            }
+        }
+        catch
+        {
+            Write-Output "*** Failed to copy/register msdia140.dll for Python 3.9 32-bit, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 32-bit not found, skipping PyKD install (x86)"
+    }
+
+    if (Test-Path $python64Exe -PathType Leaf)
+    {
+        try
+        {
+            if (Test-PythonModuleInstalled -PythonExe $python64Exe -ModuleName "pykd")
+            {
+                Write-Output "       PyKD already present for Python 3.9 64-bit, skipping pip install"
+            }
+            else
+            {
+                Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install pykd" -Description "Installing PyKD for Python 3.9 64-bit"
+            }
+        }
+        catch
+        {
+            Write-Output "*** PyKD install failed for Python 3.9 64-bit, continuing"
+        }
+
+        try
+        {
+            Ensure-Folder $engineExt64
+
+            Write-Output "       Registering msdia100.dll 64-bit (continue if missing)"
+            Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
+
+            Write-Output "       Registering msdia120.dll (continue if missing)"
+            Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
+        }
+        catch
+        {
+            Write-Output "*** Failed to register DIA DLLs for Python 3.9 64-bit, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 64-bit not found, skipping PyKD install (x64)"
+    }
+}
+
+function Install-KeystoneEngine39
+{
+    Write-Output "       Installing keystone-engine via pip in Python 3.9 (x86/x64)"
+
+    if (Test-Path $python32Exe -PathType Leaf)
+    {
+        try
+        {
+            if (Test-PythonModuleInstalled -PythonExe $python32Exe -ModuleName "keystone")
+            {
+                Write-Output "       keystone already present for Python 3.9 32-bit, skipping pip install"
+            }
+            else
+            {
+                Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 32-bit"
+            }
+        }
+        catch
+        {
+            Write-Output "*** keystone-engine install failed for Python 3.9 32-bit, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 32-bit not found, skipping keystone-engine install (x86)"
+    }
+
+    if (Test-Path $python64Exe -PathType Leaf)
+    {
+        try
+        {
+            if (Test-PythonModuleInstalled -PythonExe $python64Exe -ModuleName "keystone")
+            {
+                Write-Output "       keystone already present for Python 3.9 64-bit, skipping pip install"
+            }
+            else
+            {
+                Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 64-bit"
+            }
+        }
+        catch
+        {
+            Write-Output "*** keystone-engine install failed for Python 3.9 64-bit, continuing"
+        }
+    }
+    else
+    {
+        Write-Output "       Python 3.9 64-bit not found, skipping keystone-engine install (x64)"
+    }
+}
+
 ### MAIN ROUTINE ###
 
 # Check if system is Windows 10 or later
@@ -476,7 +778,10 @@ Write-Output "[+] Creating temp folder $env:tempfolder"
 Ensure-Folder $env:tempfolder
 Ensure-Folder $engineExt32
 Ensure-Folder $engineExt64
+Ensure-Folder $userExtensions
 Ensure-Folder $vcShared32
+
+Remove-ExistingPyKD
 
 $wingetAvailable = Ensure-Winget -TempFolder $env:tempfolder
 
@@ -504,28 +809,34 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    1. Python 2.7.18"
     [void](Download-File -Uri $env:pythonUrl -OutFile (Join-Path $env:tempfolder $env:pythonfile) -Label "Downloading Python 2.7.18")
 
-    Write-Output "    2. Classic WinDBG"
+    Write-Output "    2. Python 3.9.13 (32-bit)"
+    [void](Download-File -Uri $env:python32Url -OutFile (Join-Path $env:tempfolder $env:python32installer) -Label "Downloading Python 3.9.13 32-bit")
+
+    Write-Output "    3. Python 3.9.13 (64-bit)"
+    [void](Download-File -Uri $env:python64Url -OutFile (Join-Path $env:tempfolder $env:python64installer) -Label "Downloading Python 3.9.13 64-bit")
+
+    Write-Output "    4. Classic WinDBG"
     [void](Download-File -Uri $env:windbgUrl -OutFile (Join-Path $env:tempfolder $env:windbgfile) -Label "Downloading Classic WinDBG")
 
-    Write-Output "    3. PyKD extension package (x86)"
+    Write-Output "    5. PyKD extension package (x86)"
     [void](Download-File -Uri $env:pykdExtX86Url -OutFile (Join-Path $env:tempfolder $env:pykdExtX86File) -Label "Downloading PyKD extension package (x86)")
 
-    Write-Output "    4. PyKD extension package (x64)"
+    Write-Output "    6. PyKD extension package (x64)"
     [void](Download-File -Uri $env:pykdExtX64Url -OutFile (Join-Path $env:tempfolder $env:pykdExtX64File) -Label "Downloading PyKD extension package (x64)")
 
-    Write-Output "    5. mona.py"
+    Write-Output "    7. mona.py"
     [void](Download-File -Uri $env:monaUrl -OutFile (Join-Path $env:tempfolder $env:monafile) -Label "Downloading mona.py")
 
-    Write-Output "    6. windbglib.py"
+    Write-Output "    8. windbglib.py"
     [void](Download-File -Uri $env:windbglibUrl -OutFile (Join-Path $env:tempfolder $env:windbglibfile) -Label "Downloading windbglib.py")
 
-    Write-Output "    7. Visual Studio 2017 Desktop Express"
+    Write-Output "    9. Visual Studio 2017 Desktop Express"
     [void](Download-File -Uri $env:vscommunityUrl -OutFile (Join-Path $env:tempfolder $env:vscommunityfile) -Label "Downloading Visual Studio 2017 Desktop Express")
 
-    Write-Output "    8. VC++ Redistributable (x86)"
+    Write-Output "    10. VC++ Redistributable (x86)"
     [void](Download-File -Uri $env:vcredistUrl -OutFile (Join-Path $env:tempfolder $env:vcredistfile) -Label "Downloading VC++ Redistributable (x86)")
 
-    Write-Output "    9. VC++ 2010 SP1 Redistributable (x86)"
+    Write-Output "    11. VC++ 2010 SP1 Redistributable (x86)"
     [void](Download-File -Uri $env:vc2010redistUrl -OutFile (Join-Path $env:tempfolder $env:vc2010redistfile) -Label "Downloading VC++ 2010 SP1 Redistributable (x86)")
 
 
@@ -576,7 +887,20 @@ if (Test-Path $env:tempfolder -PathType Container)
         Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd' -ErrorAction Stop
     }
 
-    Write-Output "    2. VC++ Redistributable (x86)"
+    Invoke-NonFatalStep "Install Python 3.9.13 (x86/x64)" {
+        Install-Python39
+    }
+    Invoke-NonFatalStep "Upgrade pip in Python 3.9 (x86/x64)" {
+        Upgrade-Pip39
+    }
+    Invoke-NonFatalStep "Install PyKD in Python 3.9 (x86/x64)" {
+        Install-PyKD39
+    }
+    Invoke-NonFatalStep "Install keystone-engine in Python 3.9 (x86/x64)" {
+        Install-KeystoneEngine39
+    }
+
+    Write-Output "    3. VC++ Redistributable (x86)"
     Invoke-NonFatalStep "Install VC++ Redistributable (x86)" {
         Start-Process (Join-Path $env:tempfolder $env:vcredistfile) -Wait -ArgumentList '/quiet /norestart' -ErrorAction Stop
     }
@@ -585,25 +909,35 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
 
 
-    $pykdPydPath = Find-PyKDPyd -SitePackagesPath "C:\Python27\Lib\site-packages"
-    if ($pykdPydPath)
+    $msdia140Source = Find-Msdia140 -SearchRoot $python32Root
+    if (-not $msdia140Source)
     {
-        $pykdSitePackagesFolder = Split-Path -Parent $pykdPydPath
-        $msdia140Source = Join-Path $pykdSitePackagesFolder "msdia140.dll"
-        if (-not (Test-Path $msdia140Source -PathType Leaf))
+        $pykdPydPath = Find-PyKDPyd -SitePackagesPath "C:\\Python27\\Lib\\site-packages"
+        if ($pykdPydPath)
         {
+            $pykdSitePackagesFolder = Split-Path -Parent $pykdPydPath
+            $msdia140Source = Join-Path $pykdSitePackagesFolder "msdia140.dll"
+            if (-not (Test-Path $msdia140Source -PathType Leaf))
+            {
+                $msdia140Source = Find-Msdia140 -SearchRoot $pykdSitePackagesFolder
+            }
+        }
+        else
+        {
+            $pykdSitePackagesFolder = "C:\\Python27\\Lib\\site-packages"
             $msdia140Source = Find-Msdia140 -SearchRoot $pykdSitePackagesFolder
         }
     }
-    else
-    {
-        $pykdSitePackagesFolder = "C:\Python27\Lib\site-packages"
-        $msdia140Source = Find-Msdia140 -SearchRoot $pykdSitePackagesFolder
-    }
 
-    if ($msdia140Source -and (Test-Path $msdia140Source -PathType Leaf))
+    if (Test-Path $msdia140Target -PathType Leaf)
     {
-        Write-Output "    3. Copying msdia140.dll to $vcShared32"
+        Write-Output "    4. msdia140.dll already present in $vcShared32"
+        Write-Output "       Registering msdia140.dll (continue if missing)"
+        Register-DllSilent -DllPath $msdia140Target -Bitness x86 -ContinueOnMissing
+    }
+    elseif ($msdia140Source -and (Test-Path $msdia140Source -PathType Leaf))
+    {
+        Write-Output "    4. Copying msdia140.dll to $vcShared32"
         try
         {
             Ensure-Folder $vcShared32
@@ -618,22 +952,22 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
     else
     {
-        Write-Output "    3. msdia140.dll not found in site-packages, skipping"
+        Write-Output "    4. msdia140.dll not found, skipping"
     }
 
-    Write-Output "    4. Registering msdia100.dll (continue if missing)"
+    Write-Output "    5. Registering msdia100.dll (continue if missing)"
     Register-DllSilent -DllPath $msdia100_32 -Bitness x86 -ContinueOnMissing
 
-    Write-Output "    5. Registering msdia120.dll (continue if missing)"
+    Write-Output "    6. Registering msdia120.dll (continue if missing)"
     Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
 
-    Write-Output "    6. WinDBG"
+    Write-Output "    7. WinDBG"
     Write-Output "       Hold on, this may take a while..."
     Invoke-NonFatalStep "Install WinDBG" {
         Start-Process (Join-Path $env:tempfolder $env:windbgfile) -Wait -ArgumentList '/features OptionId.WindowsDesktopDebuggers /ceip off /q' -ErrorAction Stop
     }
 
-    Write-Output "    7. WinDBGX"
+    Write-Output "    8. WinDBGX"
     if ($wingetAvailable)
     {
         Invoke-NonFatalStep "Install WinDBGX" {
@@ -645,7 +979,7 @@ if (Test-Path $env:tempfolder -PathType Container)
         Write-Output "    winget not available, skipping WinDBGX"
     }
 
-    Write-Output "    8. Visual Studio Code"
+    Write-Output "    9. Visual Studio Code"
     if ($wingetAvailable)
     {
         Invoke-NonFatalStep "Install Visual Studio Code" {
@@ -657,10 +991,10 @@ if (Test-Path $env:tempfolder -PathType Container)
         Write-Output "    winget not available, skipping Visual Studio Code"
     }
 
-    Write-Output "    9. PyKD, windbglib and mona"
-    Write-Output "       a. Installing mona.py and windbglib.py in C:\Tools\mona"
-    Invoke-NonFatalStep "Install mona.py and windbglib.py in C:\Tools\mona" {
-        $toolsMonaFolder = "C:\Tools\mona"
+    Write-Output "    10. PyKD, windbglib and mona"
+    Write-Output "       a. Installing mona.py and windbglib.py in C:\Tools\mona3"
+    Invoke-NonFatalStep "Install mona.py and windbglib.py in C:\Tools\mona3" {
+        $toolsMonaFolder = "C:\Tools\mona3"
         Ensure-Folder $toolsMonaFolder
         Copy-Item -Path (Join-Path $env:tempfolder $env:monafile) -Destination $toolsMonaFolder -Force -ErrorAction Stop
         Copy-Item -Path (Join-Path $env:tempfolder $env:windbglibfile) -Destination $toolsMonaFolder -Force -ErrorAction Stop
@@ -700,7 +1034,7 @@ if (Test-Path $env:tempfolder -PathType Container)
         }
     }
 
-    Write-Output "    10. 7Zip"
+    Write-Output "    11. 7Zip"
     if ($wingetAvailable)
     {
         Invoke-NonFatalStep "Install 7Zip" {
@@ -712,7 +1046,7 @@ if (Test-Path $env:tempfolder -PathType Container)
         Write-Output "    winget not available, skipping 7Zip"
     }
 
-    Write-Output "    11. Visual Studio 2017 Desktop Express - manual install"
+    Write-Output "    12. Visual Studio 2017 Desktop Express - manual install"
     Invoke-NonFatalStep "Launch Visual Studio 2017 Desktop Express installer" {
         Start-Process (Join-Path $env:tempfolder $env:vscommunityfile) -Wait -ErrorAction Stop
     }
@@ -720,9 +1054,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "[+] Launching WinDBG to check if everything is ok"
     Write-Output "    ==> Please check the WinDBG log window and confirm that:"
     Write-Output "        - the !peb command didn't produce an error message"
-    Write-Output "        - the !py -2 C:\Tools\mona3\mona.py command resulted in a list of available mona commands"
+    Write-Output "        - the !py -3.9 C:\Tools\mona3\mona.py command resulted in a list of available mona commands"
     Invoke-NonFatalStep "Launch WinDBG validation session" {
-        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -2 C:\Tools\mona3\mona.py config -set workingfolder c:\logs\%p; !peb; !py -2 C:\Tools\mona3\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
+        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -3.9 C:\Tools\mona3\mona.py config -set workingfolder c:\logs\%p; !peb; !py -3.9 C:\Tools\mona3\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
     }
 
     Write-Output "[+] Removing temporary folder again"
@@ -735,9 +1069,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    In WinDBG(X) run:"
     Write-Output ""
     Write-Output "      !load pykd"
-    Write-Output "      as !mona !py -2 C:\Tools\mona3\mona.py"
+    Write-Output "      as !mona !py -3.9 C:\Tools\mona3\mona.py"
     Write-Output ""
-    Write-Output '    Or run windbg.exe (windbgx.exe) with argument -c "!load pykd; as !mona !py -2 C:\Tools\mona3\mona.py"'
+    Write-Output '    Or run windbg.exe (windbgx.exe) with argument -c "!load pykd; as !mona !py -3.9 C:\Tools\mona3\mona.py"'
     Write-Output "    After that you can simply run '!mona' at the WinDBG(X) command line."
     Write-Output ""
     Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"

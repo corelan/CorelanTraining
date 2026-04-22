@@ -45,6 +45,7 @@ except NameError:
 
 SCRIPT_NAME = "corelanWin7VMinstall.py"
 TEMP_FOLDER = r"C:\corelantemp"
+MONA3_FOLDER = r"C:\Tools\mona3"
 SYMBOL_PATH = r"srv*c:\symbols*http://msdl.microsoft.com/download/symbols"
 
 PYTHON2_X86_URL = "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi"
@@ -52,8 +53,8 @@ PYTHON2_X64_URL = "https://www.python.org/ftp/python/2.7.18/python-2.7.18.amd64.
 PYTHON32_URL = "https://www.python.org/ftp/python/3.8.10/python-3.8.10.exe"
 PYTHON64_URL = "https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe"
 WINDBG_URL = "https://go.microsoft.com/fwlink/p/?LinkId=323507"
-MONA_URL = "https://github.com/corelan/mona/raw/master/mona.py"
-WINDBGLIB_URL = "https://github.com/corelan/windbglib/raw/master/windbglib.py"
+MONA_URL = "https://www.corelan.be/mona3/mona.py"
+WINDBGLIB_URL = "https://www.corelan.be/mona3/windbglib.py"
 PYKD_EXT_X86_URL = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
 PYKD_EXT_X64_URL = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 VCREDIST_X86_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x86.exe"
@@ -532,25 +533,13 @@ def copy_file_checked(src, dst_dir):
     shutil.copy2(src, os.path.join(dst_dir, os.path.basename(src)))
 
 
-def install_mona_and_windbglib(windbg_root):
-    x86 = os.path.join(windbg_root, "x86")
-    x64 = os.path.join(windbg_root, "x64")
+def install_mona_and_windbglib():
     mona = os.path.join(TEMP_FOLDER, MONA_FILE)
     windbglib = os.path.join(TEMP_FOLDER, WINDBGLIB_FILE)
 
-    copied_any = False
-
-    if os.path.isdir(x86):
-        copy_file_checked(mona, x86)
-        copy_file_checked(windbglib, x86)
-        copied_any = True
-    if os.path.isdir(x64):
-        copy_file_checked(mona, x64)
-        copy_file_checked(windbglib, x64)
-        copied_any = True
-
-    if not copied_any:
-        raise RuntimeError("No WinDBG x86/x64 folder was found to copy mona.py and windbglib.py into")
+    ensure_dir(MONA3_FOLDER)
+    copy_file_checked(mona, MONA3_FOLDER)
+    copy_file_checked(windbglib, MONA3_FOLDER)
 
 
 def find_file_recursive(root, wanted_name):
@@ -691,6 +680,7 @@ def write_text_file(path, content):
 def create_wpy2_bat_files(windbg_root):
     x86_dir = os.path.join(windbg_root, "x86")
     x64_dir = os.path.join(windbg_root, "x64")
+    mona_path = os.path.join(MONA3_FOLDER, MONA_FILE)
 
     content_x86 = (
         "@echo off\r\n"
@@ -705,14 +695,14 @@ def create_wpy2_bat_files(windbg_root):
         "set PATH=%PYTHONHOME%;%PATH%"
         "set PYTHONPATH=%PYTHONHOME%\\Lib\r\n"
         "\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as !mona !py -2 mona.py' \"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd.pyd;as !mona !py -2 {mona_path}' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
         "\r\n"
         "set PATH=%ORIGPATH%\r\n"
         "set PYTHONHOME=\r\n"
         "set PYTHONPATH=\r\n"
-    )
+    ).format(mona_path=mona_path)
 
     content_x64 = (
         "@echo off\r\n"
@@ -727,14 +717,14 @@ def create_wpy2_bat_files(windbg_root):
         "set PATH=%PYTHONHOME%;%PATH%"
         "set PYTHONPATH=%PYTHONHOME%\\Lib\r\n"
         "\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as !mona !py -2 mona.py' \"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as !mona !py -2 {mona_path}' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
         "\r\n"
         "set PATH=%ORIGPATH%\r\n"
         "set PYTHONHOME=\r\n"
         "set PYTHONPATH=\r\n"        
-    )
+    ).format(mona_path=mona_path)
 
     if os.path.isdir(x86_dir):
         write_text_file(os.path.join(x86_dir, "wpy2.bat"), content_x86)
@@ -745,6 +735,7 @@ def create_wpy2_bat_files(windbg_root):
 def create_wpy3_bat_files(windbg_root):
     x86_dir = os.path.join(windbg_root, "x86")
     x64_dir = os.path.join(windbg_root, "x64")
+    mona_path = os.path.join(MONA3_FOLDER, MONA_FILE)
 
     content_x86 = (
         "@echo off\r\n"
@@ -759,14 +750,14 @@ def create_wpy3_bat_files(windbg_root):
         "set PATH=%PYTHONHOME%;%PATH%"
         "set PYTHONPATH=%PYTHONHOME%\\Lib\r\n"
         "\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as !mona !py -3 mona.py' \"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as !mona !py -3 {mona_path}' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
         "\r\n"
         "set PATH=%ORIGPATH%\r\n"
         "set PYTHONHOME=\r\n"
         "set PYTHONPATH=\r\n"        
-    )
+    ).format(mona_path=mona_path)
 
     content_x64 = (
         "@echo off\r\n"
@@ -782,14 +773,14 @@ def create_wpy3_bat_files(windbg_root):
         "set PYTHONPATH=%PYTHONHOME%\\Lib\r\n"
 
         "\r\n"
-        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as !mona !py -3 mona.py' \"\r\n"
+        "set \"WINDBG_CMD=windbg.exe -hd -c '!load pykd;as !mona !py -3 {mona_path}' \"\r\n"
         "\r\n"
         "%WINDBG_CMD% %*\r\n"
         "\r\n"
         "set PATH=%ORIGPATH%\r\n"
         "set PYTHONHOME=\r\n"
         "set PYTHONPATH=\r\n"        
-    )
+    ).format(mona_path=mona_path)
 
     if os.path.isdir(x86_dir):
         write_text_file(os.path.join(x86_dir, "wpy3.bat"), content_x86)
@@ -855,7 +846,7 @@ def main():
     safe_step("Creating system environment variable _NT_SYMBOL_PATH", set_system_symbol_path)
 
     if windbg_root:
-        safe_step("Copying mona.py and windbglib.py into WinDBG x86/x64 folders", install_mona_and_windbglib, windbg_root)
+        safe_step("Copying mona.py and windbglib.py to central folder", install_mona_and_windbglib)
         safe_step("Removing old pykd.pyd files from WinDBG winext folders", remove_old_pykd_pyd, windbg_root)
         safe_step("Installing pykd.dll into WinDBG x86/x64 winext folders", install_pykd_extensions, windbg_root)
         safe_step("Installing VC++ 2010 SP1 Redistributables", install_vcredist_2010)

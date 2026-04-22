@@ -35,9 +35,6 @@ $python64Root                  = Join-Path $env:LOCALAPPDATA "Programs\Python\Py
 $python32SitePackages          = Join-Path $python32Root "Lib\site-packages"
 $python64SitePackages          = Join-Path $python64Root "Lib\site-packages"
 
-$python32Dll                   = Join-Path $python32Root "python39.dll"
-$python64Dll                   = Join-Path $python64Root "python39.dll"
-
 $vcShared32                    = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
 $msdia140Target                = Join-Path $vcShared32 "msdia140.dll"
 
@@ -307,10 +304,38 @@ function Remove-ExistingPyKD
 
 function Get-WingetPythonLines
 {
-    $wingetOutput = winget list python 2>&1
+    # When output is captured (e.g. `2>&1`), winget may prompt for source agreements and hang waiting for input.
+    # Force non-interactive execution and auto-accept any required source agreements.
+    $wingetArgs = @('list', 'python', '--accept-source-agreements', '--disable-interactivity')
+    $wingetCommand = "winget $($wingetArgs -join ' ')"
+    $wingetOutput = & winget @wingetArgs 2>&1
+
+    # Older winget versions may not support these flags. Fall back gracefully so we don't break legacy installs.
     if ($LASTEXITCODE -ne 0)
     {
-        Write-Output "*** Failed to run 'winget list python'"
+        $wingetText = ($wingetOutput | Out-String)
+        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity')
+        {
+            $wingetArgs = @('list', 'python', '--accept-source-agreements')
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+        }
+    }
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        $wingetText = ($wingetOutput | Out-String)
+        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements')
+        {
+            $wingetArgs = @('list', 'python')
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+        }
+    }
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        Write-Output "*** Failed to run '$wingetCommand'"
         exit 1
     }
 
@@ -581,6 +606,12 @@ function Install-Python27PyKD
     Invoke-NonFatalStep "Install PyKD via pip in Python 2.7" {
         Start-Process $pythonExe -Wait -ArgumentList '-m pip install --upgrade pykd' -ErrorAction Stop
     }
+
+    Write-Output "       Installing keystone-engine via pip in Python 2.7"
+    Invoke-NonFatalStep "Install keystone-engine via pip in Python 2.7" {
+        Start-Process $pythonExe -Wait -ArgumentList '-m pip install --upgrade keystone-engine' -ErrorAction Stop
+    }
+
 }
 
 function Install-PyKDExtensions
