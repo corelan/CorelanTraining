@@ -487,7 +487,7 @@ oLink.Save
     try:
         f = open(vbs_path, "wb")
         try:
-            f.write(vbs.encode("ascii"))
+            f.write(vbs)
         finally:
             f.close()
         subprocess.call(["cscript.exe", "//nologo", vbs_path])
@@ -670,8 +670,13 @@ def upgrade_pip_and_install_pykd():
 def write_text_file(path, content):
     f = open(path, "wb")
     try:
-        if not isinstance(content, bytes):
-            content = content.encode("ascii")
+        if isinstance(content, text_type):
+            if sys.version_info[0] >= 3:
+                content = content.encode("utf-8")
+        elif not isinstance(content, bytes):
+            content = str(content)
+            if sys.version_info[0] >= 3:
+                content = content.encode("utf-8")
         f.write(content)
     finally:
         f.close()
