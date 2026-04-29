@@ -61,6 +61,7 @@ VCREDIST_X86_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-
 VCREDIST_X64_URL = "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x64.exe"
 DOTNET_URL = "https://go.microsoft.com/fwlink/?linkid=2088631"
 SYMBOLS_ZIP_URL = "https://www.corelan-training.com/downloads/win7symbols.zip"
+GET_PIP_PY27_URL = "https://bootstrap.pypa.io/pip/2.7/get-pip.py"
 
 PYTHON2_X86_INSTALLER = "python-2.7.18.msi"
 PYTHON2_X64_INSTALLER = "python-2.7.18.amd64.msi"
@@ -75,6 +76,7 @@ VCREDIST_X86_FILE = "vcredist_x86.exe"
 VCREDIST_X64_FILE = "vcredist_x64.exe"
 DOTNET_FILE = "NPD48-x86-x64-AllOS-ENU.exe"
 SYMBOLS_ZIP_FILE = "win7symbols.zip"
+GET_PIP_PY27_FILE = "get-pip-py27.py"
 
 LOCALAPPDATA = os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local")
 ENGINE_EXT_64 = os.path.join(LOCALAPPDATA, "DBG", "EngineExtensions")
@@ -234,19 +236,19 @@ def download_file(url, out_file, label):
         raise RuntimeError("Download produced empty file: {0}".format(out_file))
 
 
-def run_checked(cmd, description, cwd=None):
+def run_checked(cmd, description, cwd=None, env=None):
     log("    " + description)
     try:
-        rc = subprocess.call(cmd, cwd=cwd)
+        rc = subprocess.call(cmd, cwd=cwd, env=env)
     except OSError as e:
         raise RuntimeError("{0} failed: {1}".format(description, e))
     if rc != 0:
         raise RuntimeError("{0} failed with exit code {1}".format(description, rc))
 
 
-def run_capture(cmd, cwd=None):
+def run_capture(cmd, cwd=None, env=None):
     try:
-        p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         output = p.communicate()[0]
         if not isinstance(output, text_type):
             try:
@@ -259,6 +261,35 @@ def run_capture(cmd, cwd=None):
         return p.returncode, output
     except OSError as e:
         return 1, text_type(e)
+
+
+def build_clean_python_env(python_exe):
+    env = os.environ.copy()
+    env.pop("PYTHONHOME", None)
+    env.pop("PYTHONPATH", None)
+    env["PYTHONNOUSERSITE"] = "1"
+
+    python_dir = os.path.dirname(python_exe)
+    scripts_dir = os.path.join(python_dir, "Scripts")
+    original_path = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join([p for p in [python_dir, scripts_dir, original_path] if p])
+    return env
+
+
+def ensure_pip_available(python_exe, env):
+    rc, _ = run_capture([python_exe, "-m", "pip", "--version"], env=env)
+    if rc == 0:
+        return
+
+    if "Python27" in python_exe:
+        get_pip_path = os.path.join(TEMP_FOLDER, GET_PIP_PY27_FILE)
+        if not os.path.isfile(get_pip_path):
+            download_file(GET_PIP_PY27_URL, get_pip_path, "Downloading get-pip.py for Python 2.7")
+        run_checked([python_exe, get_pip_path], "Bootstrapping pip for {0}".format(python_exe), env=env)
+        return
+
+    run_checked([python_exe, "-m", "ensurepip", "--upgrade"],
+                "Bootstrapping pip for {0}".format(python_exe), env=env)
 
 
 def broadcast_environment_change():
@@ -485,11 +516,7 @@ oLink.Save
     vbs_path = os.path.join(desktop, "create_shortcut.vbs")
 
     try:
-        f = open(vbs_path, "wb")
-        try:
-            f.write(vbs)
-        finally:
-            f.close()
+        write_text_file(vbs_path, vbs)
         subprocess.call(["cscript.exe", "//nologo", vbs_path])
     finally:
         try:
@@ -649,12 +676,15 @@ def run_pip_for_python(python_exe):
         log("    Python not found: {0}".format(python_exe))
         return
 
+    env = build_clean_python_env(python_exe)
+    ensure_pip_available(python_exe, env)
+
     run_checked([python_exe, "-m", "pip", "install", "--upgrade", "pip"],
-                "Updating pip for {0}".format(python_exe))
+                "Updating pip for {0}".format(python_exe), env=env)
     run_checked([python_exe, "-m", "pip", "install", "pykd"],
-                "Installing pykd for {0}".format(python_exe))
+                "Installing pykd for {0}".format(python_exe), env=env)
     run_checked([python_exe, "-m", "pip", "install", "keystone-engine"],
-                "Installing keystone-engine for {0}".format(python_exe))
+                "Installing keystone-engine for {0}".format(python_exe), env=env)
 
 def upgrade_pip_and_install_pykd():
     targets = [
