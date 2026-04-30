@@ -782,10 +782,19 @@ function Install-PyKDExtensions
     Copy-Item -Path $pykdDllX64 -Destination (Join-Path $engineExt64 "pykd.dll") -Force
 }
 
+function Show-CorelanBanner
+{
+    Write-Output "=============================================="
+    Write-Output " Corelan PyKD Install"
+    Write-Output " www.corelan-training.com"
+    Write-Output "=============================================="
+    Write-Output ""
+}
 
 # main stuff
 
 Ensure-Admin
+Show-CorelanBanner
 
 # Check if system is Windows 10 or later
 

@@ -31,8 +31,10 @@ $env:windbgUrl = "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409"
 $env:vscommunityUrl = "https://aka.ms/vs/15/release/vs_WDExpress.exe"
 $env:vcredistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe"
 $env:vc2010redistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
-$env:monaUrl = "https://www.corelan.be/mona3/mona.py"
-$env:windbglibUrl = "https://www.corelan.be/mona3/windbglib.py"
+$env:monaUrl = "https://github.com/corelan/mona3/raw/master/mona.py"
+$env:monaBackupUrl = "https://www.corelan.be/mona3/mona.py"
+$env:windbglibUrl = "https://github.com/corelan/mona3/raw/master/windbglib.py"
+$env:windbglibBackupUrl = "https://www.corelan.be/mona3/windbglib.py"
 $env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
 $env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
@@ -58,7 +60,6 @@ $regsvr32_32 = "$env:WINDIR\SysWOW64\regsvr32.exe"
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktopPath "Corelan CMD Prompt.lnk"
-$cmdArguments = '/K "cd /d ""C:\Program Files (x86)\Windows Kits\10\Debuggers\x86"""'
 
 function Confirm-Continue
 {
@@ -254,7 +255,7 @@ function Download-File
 
     try
     {
-        Start-BitsTransfer -Source $Uri -Destination $OutFile
+        Start-BitsTransfer -Source $Uri -Destination $OutFile -ErrorAction Stop
         return $true
     }
     catch
@@ -262,6 +263,32 @@ function Download-File
         Write-Output "*** Download failed with curl and BITS, continuing"
         return $false
     }
+}
+
+function Download-FileWithFallbackUrls
+{
+    param(
+        [string[]]$Uris,
+        [string]$OutFile,
+        [string]$Label
+    )
+
+    foreach ($uri in $Uris)
+    {
+        if ([string]::IsNullOrWhiteSpace($uri))
+        {
+            continue
+        }
+
+        $downloadResult = @(Download-File -Uri $uri -OutFile $OutFile -Label "$Label ($uri)")
+        if ($downloadResult.Count -gt 0 -and $downloadResult[-1] -eq $true)
+        {
+            return $true
+        }
+    }
+
+    Write-Output "*** Download failed for $Label"
+    return $false
 }
 
 function Ensure-Winget
@@ -394,10 +421,17 @@ function Find-PyKDPyd
         return $null
     }
 
-    $directPath = Join-Path $SitePackagesPath "pykd.pyd"
-    if (Test-Path $directPath -PathType Leaf)
+    $candidates = @(
+        (Join-Path $SitePackagesPath "pykd.pyd"),
+        (Join-Path $SitePackagesPath "pykd\pykd.pyd")
+    )
+
+    foreach ($candidate in $candidates)
     {
-        return $directPath
+        if (Test-Path $candidate -PathType Leaf)
+        {
+            return $candidate
+        }
     }
 
     $found = Get-ChildItem -Path $SitePackagesPath -Recurse -Filter "pykd.pyd" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -511,6 +545,84 @@ function Remove-ExistingPyKD
     {
         Remove-FileIfExists $path
     }
+}
+
+function Get-WingetPythonLines
+{
+    $wingetArgs = @('list', 'python', '--accept-source-agreements', '--disable-interactivity')
+    $wingetCommand = "winget $($wingetArgs -join ' ')"
+    $wingetOutput = & winget @wingetArgs 2>&1
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        $wingetText = ($wingetOutput | Out-String)
+        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity')
+        {
+            $wingetArgs = @('list', 'python', '--accept-source-agreements')
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+        }
+    }
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        $wingetText = ($wingetOutput | Out-String)
+        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements')
+        {
+            $wingetArgs = @('list', 'python')
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+        }
+    }
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        Write-Output "*** Failed to run '$wingetCommand', continuing"
+        return @()
+    }
+
+    return @($wingetOutput | Where-Object { $_ -match '^\s*Python' })
+}
+
+function Validate-WingetPythonSources
+{
+    param(
+        [string]$StageDescription
+    )
+
+    Write-Output "[+] Checking Python packages via winget ($StageDescription)"
+
+    $pythonLines = Get-WingetPythonLines
+
+    if ($pythonLines.Count -eq 0)
+    {
+        Write-Output "    No Python packages reported by 'winget list python'"
+        return $true
+    }
+
+    $invalidLines = @()
+    foreach ($line in $pythonLines)
+    {
+        if ($line -notmatch 'winget\s*$')
+        {
+            $invalidLines += $line
+        }
+    }
+
+    if ($invalidLines.Count -gt 0)
+    {
+        Write-Output "*** One or more Python packages do not have source 'winget':"
+        foreach ($line in $invalidLines)
+        {
+            Write-Output "    $line"
+        }
+        Write-Output "*** Please remove the Python packages above that were not installed from winget."
+        Write-Output "*** Continuing anyway."
+        return $false
+    }
+
+    Write-Output "    All Python entries reported by winget have source 'winget'"
+    return $true
 }
 
 function Run-ProcessChecked
@@ -774,6 +886,44 @@ function Install-KeystoneEngine39
     }
 }
 
+function Install-KeystoneEngine27
+{
+    $python27Exe = "C:\Python27\python.exe"
+
+    Write-Output "       Installing keystone-engine via pip in Python 2.7"
+
+    if (-not (Test-Path $python27Exe -PathType Leaf))
+    {
+        Write-Output "       Python 2.7 not found, skipping keystone-engine install"
+        return
+    }
+
+    try
+    {
+        if (Test-PythonModuleInstalled -PythonExe $python27Exe -ModuleName "keystone")
+        {
+            Write-Output "       keystone already present for Python 2.7, skipping pip install"
+        }
+        else
+        {
+            Run-ProcessChecked -FilePath $python27Exe -Arguments "-m pip install --upgrade keystone-engine" -Description "Installing keystone-engine for Python 2.7"
+        }
+    }
+    catch
+    {
+        Write-Output "*** keystone-engine install failed for Python 2.7, continuing"
+    }
+}
+
+function Show-CorelanBanner
+{
+    Write-Output "=============================================="
+    Write-Output " Corelan Training VM Install"
+    Write-Output " www.corelan-training.com"
+    Write-Output "=============================================="
+    Write-Output ""
+}
+
 ### MAIN ROUTINE ###
 
 # Check if system is Windows 10 or later
@@ -787,6 +937,7 @@ if ($ver.Major -lt 10) {
 
 
 Ensure-Admin
+Show-CorelanBanner
 
 Write-Host "*** -->> Make sure you have an active internet connection before proceeding! <<-- ***"
 Confirm-Continue
@@ -804,12 +955,17 @@ Remove-ExistingPyKD
 
 $wingetAvailable = Ensure-Winget -TempFolder $env:tempfolder
 
+if ($wingetAvailable)
+{
+    [void](Validate-WingetPythonSources -StageDescription "before Python install")
+}
+
 Write-Output "[+] Creating shortcut to cmd.exe on desktop (set to 'Run As Administrator')."
 
 $WshShell = New-Object -ComObject WScript.Shell
 $shortcut = $WshShell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $cmdPath
-$shortcut.Arguments = $cmdArguments
+$shortcut.TargetPath = "C:\Windows\System32\cmd.exe"
+$shortcut.Arguments = '/K "cd /d ""C:\Program Files (x86)\Windows Kits\10\Debuggers\x86"""'
 $shortcut.WorkingDirectory = "$env:WINDIR\System32"
 $shortcut.WindowStyle = 1
 $shortcut.IconLocation = "$cmdPath,0"
@@ -844,10 +1000,10 @@ if (Test-Path $env:tempfolder -PathType Container)
     [void](Download-File -Uri $env:pykdExtX64Url -OutFile (Join-Path $env:tempfolder $env:pykdExtX64File) -Label "Downloading PyKD extension package (x64)")
 
     Write-Output "    7. mona.py"
-    [void](Download-File -Uri $env:monaUrl -OutFile (Join-Path $env:tempfolder $env:monafile) -Label "Downloading mona.py")
+    [void](Download-FileWithFallbackUrls -Uris @($env:monaUrl, $env:monaBackupUrl) -OutFile (Join-Path $env:tempfolder $env:monafile) -Label "Downloading mona.py")
 
     Write-Output "    8. windbglib.py"
-    [void](Download-File -Uri $env:windbglibUrl -OutFile (Join-Path $env:tempfolder $env:windbglibfile) -Label "Downloading windbglib.py")
+    [void](Download-FileWithFallbackUrls -Uris @($env:windbglibUrl, $env:windbglibBackupUrl) -OutFile (Join-Path $env:tempfolder $env:windbglibfile) -Label "Downloading windbglib.py")
 
     Write-Output "    9. Visual Studio 2017 Desktop Express"
     [void](Download-File -Uri $env:vscommunityUrl -OutFile (Join-Path $env:tempfolder $env:vscommunityfile) -Label "Downloading Visual Studio 2017 Desktop Express")
@@ -909,6 +1065,10 @@ if (Test-Path $env:tempfolder -PathType Container)
     Invoke-NonFatalStep "Install Python 3.9.13 (x86/x64)" {
         Install-Python39
     }
+    if ($wingetAvailable)
+    {
+        [void](Validate-WingetPythonSources -StageDescription "after Python install")
+    }
     Invoke-NonFatalStep "Upgrade pip in Python 3.9 (x86/x64)" {
         Upgrade-Pip39
     }
@@ -917,6 +1077,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
     Invoke-NonFatalStep "Install keystone-engine in Python 3.9 (x86/x64)" {
         Install-KeystoneEngine39
+    }
+    Invoke-NonFatalStep "Install keystone-engine in Python 2.7" {
+        Install-KeystoneEngine27
     }
 
     Write-Output "    3. VC++ Redistributable (x86)"
