@@ -35,8 +35,8 @@ $env:monaUrl = "https://github.com/corelan/mona3/raw/master/mona.py"
 $env:monaBackupUrl = "https://www.corelan.be/mona3/mona.py"
 $env:windbglibUrl = "https://github.com/corelan/mona3/raw/master/windbglib.py"
 $env:windbglibBackupUrl = "https://www.corelan.be/mona3/windbglib.py"
-$env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
-$env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
+$env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x86.zip"
+$env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x64.zip"
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
 $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
 
@@ -1184,12 +1184,12 @@ if (Test-Path $env:tempfolder -PathType Container)
 
     Write-Output "       b. Installing pykd.dll in WinDBG engine/extensions x86 folder"
     Invoke-NonFatalStep "Install pykd.dll in debugger extension search path x86 (EngineExtensions32)" {
-        Copy-Item -Path "$env:tempfolder\pykd-ext-x86\Release\pykd.dll" -Destination (Join-Path $engineExt32 'pykd.dll') -Force -ErrorAction Stop
+        Copy-Item -Path "$env:tempfolder\pykd-ext-x86\pykd.dll" -Destination (Join-Path $engineExt32 'pykd.dll') -Force -ErrorAction Stop
     }
 
     Write-Output "       c. Installing pykd.dll in WinDBG engine/extensions x64 folder"
     Invoke-NonFatalStep "Install pykd.dll in debugger extension search path x64 (EngineExtensions)" {
-        Copy-Item -Path "$env:tempfolder\pykd-ext-x64\Release\pykd.dll" -Destination (Join-Path $engineExt64 'pykd.dll') -Force -ErrorAction Stop
+        Copy-Item -Path "$env:tempfolder\pykd-ext-x64\pykd.dll" -Destination (Join-Path $engineExt64 'pykd.dll') -Force -ErrorAction Stop
     }
 
     if (Test-Path $env:immunitypycommandsfolder -PathType Container)

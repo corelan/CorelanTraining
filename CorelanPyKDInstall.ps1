@@ -21,8 +21,8 @@ $env:vc2010redistfile          = "vc2010_runtime_redist_x86.exe"
 $python32Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
 $python64Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
 $vc2010redistUrl               = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
-$pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x86.zip"
-$pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.24/x64.zip"
+$pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x86.zip"
+$pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x64.zip"
 
 $classicDbgBase                = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt64                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
@@ -757,18 +757,18 @@ function Install-PyKDExtensions
     Write-Output "    Extracting PyKD-Ext x64"
     Expand-Archive -Path $pykdExtX64Zip -DestinationPath $pykdExtX64Extract -Force
 
-    $pykdDllX86 = Join-Path $pykdExtX86Extract "Release\pykd.dll"
-    $pykdDllX64 = Join-Path $pykdExtX64Extract "Release\pykd.dll"
+    $pykdDllX86 = Join-Path $pykdExtX86Extract "pykd.dll"
+    $pykdDllX64 = Join-Path $pykdExtX64Extract "pykd.dll"
 
     if (-not (Test-Path $pykdDllX86 -PathType Leaf))
     {
-        Write-Output "*** Unable to locate x86 Release\pykd.dll in PyKD-Ext archive"
+        Write-Output "*** Unable to locate x86 pykd.dll in PyKD-Ext archive"
         exit 1
     }
 
     if (-not (Test-Path $pykdDllX64 -PathType Leaf))
     {
-        Write-Output "*** Unable to locate x64 Release\pykd.dll in PyKD-Ext archive"
+        Write-Output "*** Unable to locate x64 pykd.dll in PyKD-Ext archive"
         exit 1
     }
 
