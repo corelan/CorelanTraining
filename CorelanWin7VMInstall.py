@@ -77,6 +77,7 @@ VCREDIST_X64_FILE = "vcredist_x64.exe"
 DOTNET_FILE = "NPD48-x86-x64-AllOS-ENU.exe"
 SYMBOLS_ZIP_FILE = "win7symbols.zip"
 GET_PIP_PY27_FILE = "get-pip-py27.py"
+DOTNET48_MIN_RELEASE = 528040
 
 LOCALAPPDATA = os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local")
 ENGINE_EXT_64 = os.path.join(LOCALAPPDATA, "DBG", "EngineExtensions")
@@ -86,6 +87,17 @@ PYTHON27_X86_ROOT = r"C:\Python27"
 PYTHON27_X64_ROOT = r"C:\Python27-64"
 PYTHON38_X86_ROOT = os.path.join(LOCALAPPDATA, "Programs", "Python", "Python38-32")
 PYTHON38_X64_ROOT = os.path.join(LOCALAPPDATA, "Programs", "Python", "Python38")
+PYTHON38_X86_ALT_ROOTS = [
+    PYTHON38_X86_ROOT,
+    r"C:\Python38",
+    r"C:\Python38-32",
+]
+PYTHON38_X64_ALT_ROOTS = [
+    PYTHON38_X64_ROOT,
+    r"C:\Python38-64",
+]
+ACTIVE_PYTHON38_X86_ROOT = PYTHON38_X86_ROOT
+ACTIVE_PYTHON38_X64_ROOT = PYTHON38_X64_ROOT
 
 PROGRAM_FILES_X86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
 PROGRAM_FILES = os.environ.get("ProgramFiles", r"C:\Program Files")
@@ -263,6 +275,147 @@ def run_capture(cmd, cwd=None, env=None):
         return 1, text_type(e)
 
 
+def format_exit_code(rc):
+    if rc < 0:
+        return "{0} (0x{1:08X})".format(rc, rc & 0xffffffff)
+    return str(rc)
+
+
+def read_text_file(path):
+    if not path or not os.path.isfile(path):
+        return None
+    f = open(path, "rb")
+    try:
+        data = f.read()
+    finally:
+        f.close()
+
+    for encoding in ("utf-8", "utf-16", "mbcs", "latin-1"):
+        try:
+            return data.decode(encoding)
+        except Exception:
+            pass
+    return data.decode("latin-1", "replace")
+
+
+def tail_text(text, max_lines):
+    if not text:
+        return ""
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    lines = [line for line in lines if line]
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    return "\n".join(lines[-max_lines:])
+
+
+def run_checked_with_log(cmd, description, log_path=None, cwd=None, env=None):
+    log("    " + description)
+    try:
+        rc = subprocess.call(cmd, cwd=cwd, env=env)
+    except OSError as e:
+        raise RuntimeError("{0} failed: {1}".format(description, e))
+
+    if rc == 0:
+        return
+
+    details = []
+    if log_path and os.path.isfile(log_path):
+        log_text = read_text_file(log_path)
+        tail = tail_text(log_text, 25)
+        if tail:
+            details.append("Installer log tail from {0}:\n{1}".format(log_path, tail))
+
+    message = "{0} failed with exit code {1}".format(description, format_exit_code(rc))
+    if details:
+        message = message + "\n" + "\n".join(details)
+    raise RuntimeError(message)
+
+
+def get_python_version_info(python_exe):
+    if not os.path.isfile(python_exe):
+        return None
+
+    rc, output = run_capture([
+        python_exe,
+        "-c",
+        "import platform,struct,sys; "
+        "sys.stdout.write('%s|%s|%s' % (platform.python_version(), struct.calcsize('P') * 8, sys.executable))"
+    ])
+    if rc != 0:
+        return None
+
+    parts = output.strip().split("|", 2)
+    if len(parts) != 3:
+        return None
+
+    return {
+        "version": parts[0],
+        "bits": parts[1],
+        "exe": parts[2],
+    }
+
+
+def ensure_python_version(python_exe, expected_version, expected_bits, install_func, label):
+    info = get_python_version_info(python_exe)
+    if info and info["version"] == expected_version and info["bits"] == str(expected_bits):
+        log("    Skipping {0}; found Python {1} {2}-bit at {3}".format(
+            label, info["version"], info["bits"], info["exe"]
+        ))
+        return
+
+    if info:
+        log("    Existing Python at {0} is {1} {2}-bit; reinstalling expected {3} {4}-bit".format(
+            python_exe, info["version"], info["bits"], expected_version, expected_bits
+        ))
+
+    install_func()
+
+
+def unique_paths(paths):
+    seen = set()
+    result = []
+    for path in paths:
+        norm = os.path.normcase(path)
+        if norm in seen:
+            continue
+        seen.add(norm)
+        result.append(path)
+    return result
+
+
+def find_matching_python_root(candidate_roots, expected_version, expected_bits):
+    for root in unique_paths(candidate_roots):
+        info = get_python_version_info(os.path.join(root, "python.exe"))
+        if info and info["version"] == expected_version and info["bits"] == str(expected_bits):
+            return root, info
+    return None, None
+
+
+def get_dotnet_release():
+    reg_paths = [
+        r"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full",
+        r"SOFTWARE\Wow6432Node\Microsoft\NET Framework Setup\NDP\v4\Full",
+    ]
+
+    for reg_path in reg_paths:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ)
+            try:
+                value, _ = winreg.QueryValueEx(key, "Release")
+                return int(value)
+            finally:
+                winreg.CloseKey(key)
+        except Exception:
+            pass
+
+    return None
+
+
+def has_dotnet_48():
+    release = get_dotnet_release()
+    return release is not None and release >= DOTNET48_MIN_RELEASE
+
+
 def build_clean_python_env(python_exe):
     env = os.environ.copy()
     env.pop("PYTHONHOME", None)
@@ -379,76 +532,126 @@ def install_local_symbols():
 def install_python27():
     py27_x86 = os.path.join(TEMP_FOLDER, PYTHON2_X86_INSTALLER)
     py27_x64 = os.path.join(TEMP_FOLDER, PYTHON2_X64_INSTALLER)
+    py27_x86_exe = os.path.join(PYTHON27_X86_ROOT, "python.exe")
+    py27_x64_exe = os.path.join(PYTHON27_X64_ROOT, "python.exe")
 
-    run_checked(
-        ["msiexec.exe", "/i", py27_x86, "/qn", "ALLUSERS=1", "TARGETDIR={0}".format(PYTHON27_X86_ROOT)],
-        "Installing Python 2.7.18 32-bit"
-    )
-    run_checked(
-        ["msiexec.exe", "/i", py27_x64, "/qn", "ALLUSERS=1", "TARGETDIR={0}".format(PYTHON27_X64_ROOT)],
-        "Installing Python 2.7.18 64-bit"
-    )
+    def install_py27_x86():
+        run_checked(
+            ["msiexec.exe", "/i", py27_x86, "/qn", "ALLUSERS=1", "TARGETDIR={0}".format(PYTHON27_X86_ROOT)],
+            "Installing Python 2.7.18 32-bit"
+        )
+
+    def install_py27_x64():
+        run_checked(
+            ["msiexec.exe", "/i", py27_x64, "/qn", "ALLUSERS=1", "TARGETDIR={0}".format(PYTHON27_X64_ROOT)],
+            "Installing Python 2.7.18 64-bit"
+        )
+
+    ensure_python_version(py27_x86_exe, "2.7.18", 32, install_py27_x86, "Python 2.7.18 32-bit")
+    ensure_python_version(py27_x64_exe, "2.7.18", 64, install_py27_x64, "Python 2.7.18 64-bit")
 
 
 def install_python38():
+    global ACTIVE_PYTHON38_X86_ROOT
+    global ACTIVE_PYTHON38_X64_ROOT
+
     py32 = os.path.join(TEMP_FOLDER, PYTHON32_INSTALLER)
     py64 = os.path.join(TEMP_FOLDER, PYTHON64_INSTALLER)
 
     log32 = os.path.join(TEMP_FOLDER, "python38-x86-install.log")
     log64 = os.path.join(TEMP_FOLDER, "python38-x64-install.log")
 
-    args32_primary = [
-        py32,
-        "/quiet",
-        "InstallAllUsers=0",
-        "PrependPath=1",
-        "Include_pip=1",
-        "Include_test=0",
-        "Include_launcher=1",
-        "TargetDir={0}".format(PYTHON38_X86_ROOT),
-        "/log", log32,
-    ]
-    args64_primary = [
-        py64,
-        "/quiet",
-        "InstallAllUsers=0",
-        "PrependPath=1",
-        "Include_pip=1",
-        "Include_test=0",
-        "Include_launcher=1",
-        "TargetDir={0}".format(PYTHON38_X64_ROOT),
-        "/log", log64,
-    ]
+    def install_python_variant(installer, install_root, log_path, label):
+        python_exe = os.path.join(install_root, "python.exe")
+        variants = [
+            (
+                "primary",
+                [
+                    installer,
+                    "/quiet",
+                    "InstallAllUsers=0",
+                    "PrependPath=1",
+                    "Include_pip=1",
+                    "Include_test=0",
+                    "Include_launcher=1",
+                    "SimpleInstall=1",
+                    "TargetDir={0}".format(install_root),
+                    "/log", log_path,
+                ]
+            ),
+            (
+                "fallback",
+                [
+                    installer,
+                    "/quiet",
+                    "InstallAllUsers=0",
+                    "PrependPath=1",
+                    "Include_pip=1",
+                    "Include_test=0",
+                    "Include_launcher=0",
+                    "SimpleInstall=1",
+                    "TargetDir={0}".format(install_root),
+                    "/log", log_path,
+                ]
+            ),
+            (
+                "minimal fallback",
+                [
+                    installer,
+                    "/quiet",
+                    "InstallAllUsers=0",
+                    "Include_pip=1",
+                    "SimpleInstall=1",
+                    "TargetDir={0}".format(install_root),
+                    "/log", log_path,
+                ]
+            ),
+        ]
 
-    args32_fallback = [
-        py32,
-        "/quiet",
-        "TargetDir={0}".format(PYTHON38_X86_ROOT),
-        "Include_pip=1",
-        "/log", log32,
-    ]
-    args64_fallback = [
-        py64,
-        "/quiet",
-        "TargetDir={0}".format(PYTHON38_X64_ROOT),
-        "Include_pip=1",
-        "/log", log64,
-    ]
+        last_error = None
+        for index, (variant_name, args) in enumerate(variants):
+            description = "Installing Python 3.8.10 {0}".format(label)
+            if index > 0:
+                log("    Previous command failed for Python 3.8.10 {0}, trying {1}".format(label, variant_name))
+                description = "{0} ({1})".format(description, variant_name)
 
-    try:
-        run_checked(args32_primary, "Installing Python 3.8.10 32-bit")
-    except Exception:
-        log("    Primary install command failed for Python 3.8.10 32-bit, trying fallback")
-        run_checked(args32_fallback, "Installing Python 3.8.10 32-bit (fallback)")
+            try:
+                run_checked_with_log(args, description, log_path=log_path)
+                if not os.path.isfile(python_exe):
+                    raise RuntimeError("{0} completed but {1} was not created".format(description, python_exe))
+                return
+            except Exception as e:
+                last_error = e
 
-    try:
-        run_checked(args64_primary, "Installing Python 3.8.10 64-bit")
-    except Exception:
-        log("    Primary install command failed for Python 3.8.10 64-bit, trying fallback")
-        run_checked(args64_fallback, "Installing Python 3.8.10 64-bit (fallback)")
+        raise last_error
+
+    matched_root, matched_info = find_matching_python_root(PYTHON38_X86_ALT_ROOTS, "3.8.10", 32)
+    if matched_root:
+        ACTIVE_PYTHON38_X86_ROOT = matched_root
+        log("    Skipping Python 3.8.10 32-bit; found Python {0} {1}-bit at {2}".format(
+            matched_info["version"], matched_info["bits"], matched_info["exe"]
+        ))
+    else:
+        install_python_variant(py32, PYTHON38_X86_ROOT, log32, "32-bit")
+        ACTIVE_PYTHON38_X86_ROOT = PYTHON38_X86_ROOT
+
+    matched_root, matched_info = find_matching_python_root(PYTHON38_X64_ALT_ROOTS, "3.8.10", 64)
+    if matched_root:
+        ACTIVE_PYTHON38_X64_ROOT = matched_root
+        log("    Skipping Python 3.8.10 64-bit; found Python {0} {1}-bit at {2}".format(
+            matched_info["version"], matched_info["bits"], matched_info["exe"]
+        ))
+    else:
+        install_python_variant(py64, PYTHON38_X64_ROOT, log64, "64-bit")
+        ACTIVE_PYTHON38_X64_ROOT = PYTHON38_X64_ROOT
 
 
 def install_dotnetframework_48():
+    release = get_dotnet_release()
+    if release is not None and release >= DOTNET48_MIN_RELEASE:
+        log("    Skipping .Net Framework 4.8 install; found Release={0}".format(release))
+        return
+
     dotnet_install = os.path.join(TEMP_FOLDER, DOTNET_FILE)
     run_checked([dotnet_install, "/quiet", "/norestart"], "Installing .Net Framework 4.8 (this may take a while)")
 
@@ -463,10 +666,34 @@ def install_vcredist_2010():
 
 def install_windbg_classic():
     installer = os.path.join(TEMP_FOLDER, WINDBG_INSTALLER)
-    run_checked(
+    variants = [
         [installer, "/features", "OptionId.WindowsDesktopDebuggers", "/ceip", "off", "/q"],
-        "Installing WinDBG Classic via sdksetup.exe"
-    )
+        [installer, "/quiet", "/norestart", "/features", "OptionId.WindowsDesktopDebuggers", "/ceip", "off"],
+    ]
+
+    last_error = None
+    for index, args in enumerate(variants):
+        description = "Installing WinDBG Classic via sdksetup.exe"
+        if index > 0:
+            log("    Primary WinDBG install command failed, trying fallback switches")
+            description = description + " (fallback)"
+
+        try:
+            run_checked(args, description)
+        except Exception as e:
+            last_error = e
+            if detect_windbg_root():
+                log("    WinDBG was detected after a non-zero installer exit code. Continuing.")
+                return
+            continue
+
+        windbg_root = detect_windbg_root()
+        if windbg_root:
+            log("    WinDBG installed at {0}".format(windbg_root))
+            return
+        last_error = RuntimeError("{0} completed but WinDBG was not detected afterwards".format(description))
+
+    raise last_error
 
 
 def detect_windbg_root():
@@ -494,8 +721,10 @@ def create_admin_cmd_shortcut_hack(windbg_root):
     windir = os.environ.get("WINDIR", r"C:\Windows")
     target = os.path.join(windir, "System32", "cmd.exe")
 
-    startup_folder = os.path.join(windbg_root, "x86")
-    if not os.path.isdir(startup_folder):
+    startup_folder = None
+    if windbg_root:
+        startup_folder = os.path.join(windbg_root, "x86")
+    if not startup_folder or not os.path.isdir(startup_folder):
         startup_folder = os.path.join(windir, "System32")
 
     vbs = '''
@@ -523,6 +752,9 @@ oLink.Save
             os.remove(vbs_path)
         except Exception:
             pass
+
+    if not os.path.isfile(shortcut_path):
+        raise RuntimeError("Shortcut was not created: {0}".format(shortcut_path))
 
     with open(shortcut_path, "rb") as f:
         data = bytearray(f.read())
@@ -639,9 +871,9 @@ def register_msdia_files(windbg_root):
         os.path.join(PROGRAM_FILES, "Common Files", "Microsoft Shared", "VC"),
         PYTHON27_X86_ROOT,
         PYTHON27_X64_ROOT,
-        PYTHON38_X86_ROOT,
-        PYTHON38_X64_ROOT,
-    ]
+        ACTIVE_PYTHON38_X86_ROOT,
+        ACTIVE_PYTHON38_X64_ROOT,
+    ] + PYTHON38_X86_ALT_ROOTS + PYTHON38_X64_ALT_ROOTS
 
     found_any = False
 
@@ -690,8 +922,8 @@ def upgrade_pip_and_install_pykd():
     targets = [
         os.path.join(PYTHON27_X86_ROOT, "python.exe"),
         os.path.join(PYTHON27_X64_ROOT, "python.exe"),
-        os.path.join(PYTHON38_X86_ROOT, "python.exe"),
-        os.path.join(PYTHON38_X64_ROOT, "python.exe"),
+        os.path.join(ACTIVE_PYTHON38_X86_ROOT, "python.exe"),
+        os.path.join(ACTIVE_PYTHON38_X64_ROOT, "python.exe"),
     ]
     for python_exe in targets:
         run_pip_for_python(python_exe)
@@ -781,7 +1013,7 @@ def create_wpy3_bat_files(windbg_root):
         "REM ==========================================\r\n"
         "\r\n"
         "set ORIGPATH=%PATH%\r\n"
-        "set PYTHONHOME=%LOCALAPPDATA%\\Programs\\Python\\Python38-32\r\n"
+        "set PYTHONHOME={python_home}\r\n"
         "set PATH=%PYTHONHOME%;%PATH%"
         "set PYTHONPATH=%PYTHONHOME%\\Lib\r\n"
         "\r\n"
@@ -792,7 +1024,7 @@ def create_wpy3_bat_files(windbg_root):
         "set PATH=%ORIGPATH%\r\n"
         "set PYTHONHOME=\r\n"
         "set PYTHONPATH=\r\n"        
-    ).format(mona_path=mona_path)
+    ).format(mona_path=mona_path, python_home=ACTIVE_PYTHON38_X86_ROOT)
 
     content_x64 = (
         "@echo off\r\n"
@@ -803,7 +1035,7 @@ def create_wpy3_bat_files(windbg_root):
         "REM ==========================================\r\n"
         "\r\n"
         "set ORIGPATH=%PATH%\r\n"
-        "set PYTHONHOME=%LOCALAPPDATA%\\Programs\\Python\\Python38\r\n"
+        "set PYTHONHOME={python_home}\r\n"
         "set PATH=%PYTHONHOME%;%PATH%"
         "set PYTHONPATH=%PYTHONHOME%\\Lib\r\n"
 
@@ -815,7 +1047,7 @@ def create_wpy3_bat_files(windbg_root):
         "set PATH=%ORIGPATH%\r\n"
         "set PYTHONHOME=\r\n"
         "set PYTHONPATH=\r\n"        
-    ).format(mona_path=mona_path)
+    ).format(mona_path=mona_path, python_home=ACTIVE_PYTHON38_X64_ROOT)
 
     if os.path.isdir(x86_dir):
         write_text_file(os.path.join(x86_dir, "wpy3.bat"), content_x86)
