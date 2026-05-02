@@ -625,6 +625,89 @@ function Validate-WingetPythonSources
     return $true
 }
 
+function Test-WingetPackageInstalled
+{
+    param(
+        [string]$PackageId
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PackageId))
+    {
+        return $false
+    }
+
+    $wingetArgs = @('list', '--id', $PackageId, '--exact', '--accept-source-agreements', '--disable-interactivity')
+    $wingetCommand = "winget $($wingetArgs -join ' ')"
+    $wingetOutput = & winget @wingetArgs 2>&1
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        $wingetText = ($wingetOutput | Out-String)
+        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity')
+        {
+            $wingetArgs = @('list', '--id', $PackageId, '--exact', '--accept-source-agreements')
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+        }
+    }
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        $wingetText = ($wingetOutput | Out-String)
+        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements')
+        {
+            $wingetArgs = @('list', '--id', $PackageId, '--exact')
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+        }
+    }
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        Write-Output "*** Failed to run '$wingetCommand', continuing"
+        return $false
+    }
+
+    foreach ($line in $wingetOutput)
+    {
+        if ($line -match [regex]::Escape($PackageId))
+        {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-VisualStudioCodeInstalled
+{
+    $knownPaths = @(
+        "C:\Program Files\Microsoft VS Code\Code.exe",
+        "C:\Program Files (x86)\Microsoft VS Code\Code.exe",
+        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\Code.exe")
+    )
+
+    foreach ($path in $knownPaths)
+    {
+        if (Test-Path $path -PathType Leaf)
+        {
+            return $true
+        }
+    }
+
+    if (Get-Command code -ErrorAction SilentlyContinue)
+    {
+        return $true
+    }
+
+    if (Get-Command winget -ErrorAction SilentlyContinue)
+    {
+        return (Test-WingetPackageInstalled -PackageId "Microsoft.VisualStudioCode")
+    }
+
+    return $false
+}
+
 function Run-ProcessChecked
 {
     param(
@@ -1161,19 +1244,7 @@ if (Test-Path $env:tempfolder -PathType Container)
         Write-Output "    winget not available, skipping WinDBGX"
     }
 
-    Write-Output "    9. Visual Studio Code"
-    if ($wingetAvailable)
-    {
-        Invoke-NonFatalStep "Install Visual Studio Code" {
-            winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
-        }
-    }
-    else
-    {
-        Write-Output "    winget not available, skipping Visual Studio Code"
-    }
-
-    Write-Output "    10. PyKD, windbglib and mona"
+    Write-Output "    9. PyKD, windbglib and mona"
     Write-Output "       a. Installing mona.py and windbglib.py in C:\Tools\mona3"
     Invoke-NonFatalStep "Install mona.py and windbglib.py in C:\Tools\mona3" {
         $toolsMonaFolder = "C:\Tools\mona3"
@@ -1214,6 +1285,22 @@ if (Test-Path $env:tempfolder -PathType Container)
         {
             Write-Output "       e. mona.ini already exists"
         }
+    }
+
+    Write-Output "    10. Visual Studio Code"
+    if (Test-VisualStudioCodeInstalled)
+    {
+        Write-Output "       Visual Studio Code already present, skipping"
+    }
+    elseif ($wingetAvailable)
+    {
+        Invoke-NonFatalStep "Install Visual Studio Code" {
+            winget install --id Microsoft.VisualStudioCode -e --source winget --silent --accept-package-agreements --accept-source-agreements
+        }
+    }
+    else
+    {
+        Write-Output "       winget not available, skipping Visual Studio Code"
     }
 
     Write-Output "    11. 7Zip"
