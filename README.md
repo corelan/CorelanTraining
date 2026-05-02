@@ -23,9 +23,9 @@ Make sure to run scripts from an administrator prompt.
 3. Verify that you have a working internet connection.
 4. Run `powershell ./CorelanWin11VMInstall.ps1`.
 5. If all goes well, the script will:
-   - Download installers for Python 2.7.18, WinDBG, WinDBGX, PyKD, `mona.py`, `windbglib.py`, and Visual Studio 2017 Desktop Express.
+   - Download installers for Python 2.7.18, Python 3.9.13, WinDBG, WinDBGX, PyKD, `mona.py`, `windbglib.py`, and Visual Studio 2017 Desktop Express.
    - Install `winget` if needed.
-   - Install the required prerequisites and applications.
+   - Install the required prerequisites, libraries and applications.
    - Install WinDBGX, Visual Studio Code, and 7-Zip via `winget`.
    - Set up the `PATH` environment variable.
    - Create a system environment variable named `_NT_SYMBOL_PATH`.
@@ -40,7 +40,7 @@ Please keep in mind that this script will break existing legacy `mona.py` instal
 
 Do not use this script unless you know what you're doing.
 
-It allows you to run `.load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
+It allows you to run `!load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
 This allows you to run PyKD/Python scripts via `!py`.
 
 ## PyKD for Windows 7

@@ -708,6 +708,36 @@ function Test-VisualStudioCodeInstalled
     return $false
 }
 
+function Test-7ZipInstalled
+{
+    $knownPaths = @(
+        "C:\Program Files\7-Zip\7z.exe",
+        "C:\Program Files\7-Zip\7zFM.exe",
+        "C:\Program Files (x86)\7-Zip\7z.exe",
+        "C:\Program Files (x86)\7-Zip\7zFM.exe"
+    )
+
+    foreach ($path in $knownPaths)
+    {
+        if (Test-Path $path -PathType Leaf)
+        {
+            return $true
+        }
+    }
+
+    if (Get-Command 7z -ErrorAction SilentlyContinue)
+    {
+        return $true
+    }
+
+    if (Get-Command winget -ErrorAction SilentlyContinue)
+    {
+        return (Test-WingetPackageInstalled -PackageId "7zip.7zip")
+    }
+
+    return $false
+}
+
 function Run-ProcessChecked
 {
     param(
@@ -1304,7 +1334,11 @@ if (Test-Path $env:tempfolder -PathType Container)
     }
 
     Write-Output "    11. 7Zip"
-    if ($wingetAvailable)
+    if (Test-7ZipInstalled)
+    {
+        Write-Output "       7Zip already present, skipping"
+    }
+    elseif ($wingetAvailable)
     {
         Invoke-NonFatalStep "Install 7Zip" {
             winget install --id 7zip.7zip -e --source winget --silent --accept-package-agreements --accept-source-agreements
