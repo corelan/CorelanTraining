@@ -858,7 +858,7 @@ function Upgrade-Pip
     $python39x86 = Get-PythonRuntimeChecked -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 32-bit"
     $python39x64 = Get-PythonRuntimeChecked -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 64-bit"
     $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
-    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Run-ProcessChecked -FilePath $python39x86.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 32-bit"
     Run-ProcessChecked -FilePath $python39x64.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 64-bit"
@@ -872,7 +872,7 @@ function Install-Keystone-engine
     $python39x86 = Get-PythonRuntimeChecked -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 32-bit"
     $python39x64 = Get-PythonRuntimeChecked -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 64-bit"
     $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
-    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Run-ProcessChecked -FilePath $python39x86.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 32-bit"
     Run-ProcessChecked -FilePath $python39x64.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 64-bit"
@@ -945,7 +945,7 @@ function Install-Python314
         Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python31432installer) -Arguments $python31432Args -Description "Installing Python 3.14.4 32-bit"
     }
 
-    $python314x64 = Get-PythonRuntimeInfo -Selector "-3.14" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 64-bit" -WingetVersionMatch "3.14"
+    $python314x64 = Get-PythonRuntimeInfo -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 64-bit" -WingetVersionMatch "3.14"
     if (-not $python314x64.Found)
     {
         Download-File -Uri $python31464Url -OutFile (Join-Path $env:tempfolder $env:python31464installer) -Label "Python 3.14.4 64-bit installer"
@@ -982,7 +982,7 @@ function Install-PyKD314
     $pykd314Wheel32 = Get-ExtractedWheelPath -ExtractPath $pykd314X86Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x86"
     $pykd314Wheel64 = Get-ExtractedWheelPath -ExtractPath $pykd314X64Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x64"
     $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
-    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Write-Output "    Using wheel: $pykd314Wheel32"
     Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit" -ContinueOnError
