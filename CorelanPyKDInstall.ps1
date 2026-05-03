@@ -27,8 +27,8 @@ $python31464Url                = "https://www.python.org/ftp/python/3.14.4/pytho
 $vc2010redistUrl               = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
 $pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x86.zip"
 $pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x64.zip"
-$pykd314X86ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-0.3.4.15+g19ddf62-cp314-win32.zip"
-$pykd314X64ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-0.3.4.15+g19ddf62-cp314-win-amd64.zip"
+$pykd314X86ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-python3.14-package-x86.zip"
+$pykd314X64ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-python3.14-package-x64.zip"
 
 $classicDbgBase                = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt64                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
@@ -789,6 +789,15 @@ function Get-ExtractedWheelPath
     exit 1
 }
 
+function Get-UriLeafName
+{
+    param(
+        [string]$Uri
+    )
+
+    return [System.IO.Path]::GetFileName(([System.Uri]$Uri).AbsolutePath)
+}
+
 function Get-PythonRuntimeChecked
 {
     param(
@@ -938,10 +947,12 @@ function Install-PyKD314
 {
     Write-Output "[+] Installing PyKD for Python 3.14.4"
 
-    $pykd314X86Zip     = Join-Path $env:tempfolder "pykd-0.3.4.15-cp314-win32.zip"
-    $pykd314X64Zip     = Join-Path $env:tempfolder "pykd-0.3.4.15-cp314-amd64.zip"
-    $pykd314X86Extract = Join-Path $env:tempfolder "pykd-0.3.4.15-cp314-win32"
-    $pykd314X64Extract = Join-Path $env:tempfolder "pykd-0.3.4.15-cp314-amd64"
+    $pykd314X86ZipName = Get-UriLeafName -Uri $pykd314X86ZipUrl
+    $pykd314X64ZipName = Get-UriLeafName -Uri $pykd314X64ZipUrl
+    $pykd314X86Zip     = Join-Path $env:tempfolder $pykd314X86ZipName
+    $pykd314X64Zip     = Join-Path $env:tempfolder $pykd314X64ZipName
+    $pykd314X86Extract = Join-Path $env:tempfolder "pykd-cp314-win32"
+    $pykd314X64Extract = Join-Path $env:tempfolder "pykd-cp314-amd64"
 
     Download-File -Uri $pykd314X86ZipUrl -OutFile $pykd314X86Zip -Label "PyKD cp314 x86 archive"
     Download-File -Uri $pykd314X64ZipUrl -OutFile $pykd314X64Zip -Label "PyKD cp314 x64 archive"
@@ -958,8 +969,8 @@ function Install-PyKD314
     Write-Output "    Extracting PyKD cp314 x64"
     Expand-Archive -Path $pykd314X64Zip -DestinationPath $pykd314X64Extract -Force
 
-    $pykd314Wheel32 = Get-ExtractedWheelPath -ExtractPath $pykd314X86Extract -WheelNamePattern "*cp314*win32*.whl" -Label "PyKD cp314 x86"
-    $pykd314Wheel64 = Get-ExtractedWheelPath -ExtractPath $pykd314X64Extract -WheelNamePattern "*cp314*amd64*.whl" -Label "PyKD cp314 x64"
+    $pykd314Wheel32 = Get-ExtractedWheelPath -ExtractPath $pykd314X86Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x86"
+    $pykd314Wheel64 = Get-ExtractedWheelPath -ExtractPath $pykd314X64Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x64"
     $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
     $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
