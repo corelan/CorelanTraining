@@ -530,16 +530,26 @@ function Run-ProcessChecked
     param(
         [string]$FilePath,
         [string]$Arguments,
-        [string]$Description
+        [string]$Description,
+        [switch]$ContinueOnError
     )
 
     Write-Output "    $Description"
     $proc = Start-Process -FilePath $FilePath -ArgumentList $Arguments -Wait -PassThru
     if ($proc.ExitCode -ne 0)
     {
+        if ($ContinueOnError)
+        {
+            Write-Output "*** $Description failed with exit code $($proc.ExitCode)"
+            Write-Output "*** Continuing"
+            return $false
+        }
+
         Write-Output "*** $Description failed with exit code $($proc.ExitCode)"
         exit 1
     }
+
+    return $true
 }
 
 function Find-PyKDPyd
@@ -975,10 +985,10 @@ function Install-PyKD314
     $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Write-Output "    Using wheel: $pykd314Wheel32"
-    Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit"
+    Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit" -ContinueOnError
 
     Write-Output "    Using wheel: $pykd314Wheel64"
-    Run-ProcessChecked -FilePath $python314x64.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel64 + '"') -Description "Installing PyKD for Python 3.14.4 64-bit"
+    Run-ProcessChecked -FilePath $python314x64.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel64 + '"') -Description "Installing PyKD for Python 3.14.4 64-bit" -ContinueOnError
 }
 
 
