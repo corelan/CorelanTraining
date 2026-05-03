@@ -33,15 +33,16 @@ Make sure to run scripts from an administrator prompt.
 
 ## PyKD for Windows 10/11
 
-This script installs Python 3.9 and a PyKD + PyKD-Ext version that is compatible with both Python 3 and Python 2.
-It also installs the `keystone-engine` library for Python 3.9 specifically.
+This script installs Python 3.9.13, 3.14.4, and a PyKD + PyKD-Ext version that is compatible with both Python 3 and Python 2.
+It also installs the `keystone-engine` library
 
 Please keep in mind that this script will break existing legacy `mona.py` installations based on PyKD 0.2.0.x and Python 2.
 
-Do not use this script unless you know what you're doing.
+This script allows you to run `!load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
+That provides you with the ability to run PyKD/Python scripts via `!py`.
 
-It allows you to run `!load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
-This allows you to run PyKD/Python scripts via `!py`.
+You can run Python scripts with `!py -3.9` or `!py -3.14` (including [mona.py](https://github.com/corelan/mona3))  
+
 
 ## PyKD for Windows 7
 
