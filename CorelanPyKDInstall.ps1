@@ -27,8 +27,8 @@ $python31464Url                = "https://www.python.org/ftp/python/3.14.4/pytho
 $vc2010redistUrl               = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
 $pykdExtX86Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x86.zip"
 $pykdExtX64Url                 = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x64.zip"
-$pykd314X86ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-0.3.4.15-cp314-win32.zip"
-$pykd314X64ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-0.3.4.15-cp314-amd64.zip"
+$pykd314X86ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-0.3.4.15+g19ddf62-cp314-win32.zip"
+$pykd314X64ZipUrl              = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-0.3.4.15+g19ddf62-cp314-win-amd64.zip"
 
 $classicDbgBase                = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt64                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
