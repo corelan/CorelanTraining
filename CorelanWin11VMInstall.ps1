@@ -60,6 +60,7 @@ $regsvr32_32 = "$env:WINDIR\SysWOW64\regsvr32.exe"
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktopPath "Corelan CMD Prompt.lnk"
+$script:WingetSourcesReset = $false
 
 function Confirm-Continue
 {
@@ -547,41 +548,95 @@ function Remove-ExistingPyKD
     }
 }
 
+function Invoke-WingetListCommand
+{
+    param(
+        [object[]]$ArgumentSets
+    )
+
+    $lastResult = $null
+
+    for ($pass = 0; $pass -lt 2; $pass++)
+    {
+        foreach ($argumentSet in $ArgumentSets)
+        {
+            $wingetArgs = $argumentSet.Args
+            $wingetCommand = "winget $($wingetArgs -join ' ')"
+            $wingetOutput = & winget @wingetArgs 2>&1
+            $exitCode = $LASTEXITCODE
+
+            $lastResult = [pscustomobject]@{
+                ExitCode = $exitCode
+                Output = @($wingetOutput)
+                Command = $wingetCommand
+            }
+
+            if ($exitCode -eq 0)
+            {
+                return $lastResult
+            }
+
+            $unsupportedPattern = $argumentSet.UnsupportedPattern
+            if (-not [string]::IsNullOrWhiteSpace($unsupportedPattern))
+            {
+                $wingetText = ($wingetOutput | Out-String)
+                if ($wingetText -match $unsupportedPattern)
+                {
+                    continue
+                }
+            }
+
+            break
+        }
+
+        if ($pass -eq 0 -and -not $script:WingetSourcesReset)
+        {
+            Write-Output "    'winget list' failed; running 'winget source reset --force' and retrying once"
+            $resetOutput = & winget source reset --force 2>&1
+            $resetExitCode = $LASTEXITCODE
+            $script:WingetSourcesReset = $true
+
+            if ($resetExitCode -eq 0)
+            {
+                continue
+            }
+
+            Write-Output "*** Failed to reset winget sources"
+            foreach ($line in $resetOutput)
+            {
+                Write-Output "    $line"
+            }
+        }
+
+        break
+    }
+
+    return $lastResult
+}
+
 function Get-WingetPythonLines
 {
-    $wingetArgs = @('list', 'python', '--accept-source-agreements', '--disable-interactivity')
-    $wingetCommand = "winget $($wingetArgs -join ' ')"
-    $wingetOutput = & winget @wingetArgs 2>&1
-
-    if ($LASTEXITCODE -ne 0)
-    {
-        $wingetText = ($wingetOutput | Out-String)
-        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity')
-        {
-            $wingetArgs = @('list', 'python', '--accept-source-agreements')
-            $wingetCommand = "winget $($wingetArgs -join ' ')"
-            $wingetOutput = & winget @wingetArgs 2>&1
+    $wingetResult = Invoke-WingetListCommand -ArgumentSets @(
+        @{
+            Args = @('list', 'python', '--accept-source-agreements', '--disable-interactivity')
+            UnsupportedPattern = '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity'
+        },
+        @{
+            Args = @('list', 'python', '--accept-source-agreements')
+            UnsupportedPattern = '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements'
+        },
+        @{
+            Args = @('list', 'python')
         }
-    }
+    )
 
-    if ($LASTEXITCODE -ne 0)
+    if ($wingetResult.ExitCode -ne 0)
     {
-        $wingetText = ($wingetOutput | Out-String)
-        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements')
-        {
-            $wingetArgs = @('list', 'python')
-            $wingetCommand = "winget $($wingetArgs -join ' ')"
-            $wingetOutput = & winget @wingetArgs 2>&1
-        }
-    }
-
-    if ($LASTEXITCODE -ne 0)
-    {
-        Write-Output "*** Failed to run '$wingetCommand', continuing"
+        Write-Output "*** Failed to run '$($wingetResult.Command)', continuing"
         return @()
     }
 
-    return @($wingetOutput | Where-Object { $_ -match '^\s*Python' })
+    return @($wingetResult.Output | Where-Object { $_ -match '^\s*Python' })
 }
 
 function Validate-WingetPythonSources
@@ -636,39 +691,27 @@ function Test-WingetPackageInstalled
         return $false
     }
 
-    $wingetArgs = @('list', '--id', $PackageId, '--exact', '--accept-source-agreements', '--disable-interactivity')
-    $wingetCommand = "winget $($wingetArgs -join ' ')"
-    $wingetOutput = & winget @wingetArgs 2>&1
-
-    if ($LASTEXITCODE -ne 0)
-    {
-        $wingetText = ($wingetOutput | Out-String)
-        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity')
-        {
-            $wingetArgs = @('list', '--id', $PackageId, '--exact', '--accept-source-agreements')
-            $wingetCommand = "winget $($wingetArgs -join ' ')"
-            $wingetOutput = & winget @wingetArgs 2>&1
+    $wingetResult = Invoke-WingetListCommand -ArgumentSets @(
+        @{
+            Args = @('list', '--id', $PackageId, '--exact', '--accept-source-agreements', '--disable-interactivity')
+            UnsupportedPattern = '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--disable-interactivity'
+        },
+        @{
+            Args = @('list', '--id', $PackageId, '--exact', '--accept-source-agreements')
+            UnsupportedPattern = '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements'
+        },
+        @{
+            Args = @('list', '--id', $PackageId, '--exact')
         }
-    }
+    )
 
-    if ($LASTEXITCODE -ne 0)
+    if ($wingetResult.ExitCode -ne 0)
     {
-        $wingetText = ($wingetOutput | Out-String)
-        if ($wingetText -match '(?i)(unknown argument|unrecognized option|is not recognized|invalid argument).*--accept-source-agreements')
-        {
-            $wingetArgs = @('list', '--id', $PackageId, '--exact')
-            $wingetCommand = "winget $($wingetArgs -join ' ')"
-            $wingetOutput = & winget @wingetArgs 2>&1
-        }
-    }
-
-    if ($LASTEXITCODE -ne 0)
-    {
-        Write-Output "*** Failed to run '$wingetCommand', continuing"
+        Write-Output "*** Failed to run '$($wingetResult.Command)', continuing"
         return $false
     }
 
-    foreach ($line in $wingetOutput)
+    foreach ($line in $wingetResult.Output)
     {
         if ($line -match [regex]::Escape($PackageId))
         {
