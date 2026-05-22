@@ -14,8 +14,8 @@
 
 $env:tempfolder = "c:\corelantemp"
 $env:pythonfile = "python-2.7.18.msi"
-$env:python32installer = "python-3.9.13.exe"
-$env:python64installer = "python-3.9.13-amd64.exe"
+$env:python31432installer = "python-3.14.4.exe"
+$env:python31464installer = "python-3.14.4-amd64.exe"
 $env:windbgfile = "winsdksetup.exe"
 $env:vscommunityfile = "vs_WDExpress.exe"
 $env:vcredistfile = "vcredist_x86.exe"
@@ -24,9 +24,11 @@ $env:monafile = "mona.py"
 $env:windbglibfile = "windbglib.py"
 $env:pykdExtX86File = "pykd-ext-x86.zip"
 $env:pykdExtX64File = "pykd-ext-x64.zip"
+$env:pykd314X86File = "pykd-python3.14-package-x86.zip"
+$env:pykd314X64File = "pykd-python3.14-package-x64.zip"
 $env:pythonUrl = "https://www.python.org/ftp/python/2.7.18/python-2.7.18.msi"
-$env:python32Url = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
-$env:python64Url = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
+$env:python31432Url = "https://www.python.org/ftp/python/3.14.4/python-3.14.4.exe"
+$env:python31464Url = "https://www.python.org/ftp/python/3.14.4/python-3.14.4-amd64.exe"
 $env:windbgUrl = "https://go.microsoft.com/fwlink/p/?linkid=2083338&clcid=0x409"
 $env:vscommunityUrl = "https://aka.ms/vs/15/release/vs_WDExpress.exe"
 $env:vcredistUrl = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vcredist_x86.exe"
@@ -37,6 +39,8 @@ $env:windbglibUrl = "https://github.com/corelan/mona3/raw/master/windbglib.py"
 $env:windbglibBackupUrl = "https://www.corelan.be/mona3/windbglib.py"
 $env:pykdExtX86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x86.zip"
 $env:pykdExtX64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd-ext/2.0.0.25/x64.zip"
+$env:pykd314X86Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-python3.14-package-x86.zip"
+$env:pykd314X64Url = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/pykd/pykd-python3.14-package-x64.zip"
 $env:immunityprogramfolder = "C:\Program Files (x86)\Immunity Inc\Immunity Debugger"
 $env:immunitypycommandsfolder = Join-Path $env:immunityprogramfolder "PyCommands"
 
@@ -44,10 +48,8 @@ $classicDbgBase = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
 $engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
 $userExtensions = Join-Path $env:USERPROFILE "AppData\dbg\UserExtensions"
-$python32Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python39-32"
-$python64Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python39"
-$python32Exe = Join-Path $python32Root "python.exe"
-$python64Exe = Join-Path $python64Root "python.exe"
+$python31432Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314-32"
+$python31464Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314"
 $vcShared32 = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
 $vcShared64 = "C:\Program Files\Common Files\Microsoft Shared\VC"
 $msdia140Target = Join-Path $vcShared32 "msdia140.dll"
@@ -60,6 +62,7 @@ $regsvr32_32 = "$env:WINDIR\SysWOW64\regsvr32.exe"
 $cmdPath = "$env:WINDIR\System32\cmd.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = Join-Path $desktopPath "Corelan CMD Prompt.lnk"
+$script:WingetPythonLinesCache = $null
 $script:WingetSourcesReset = $false
 
 function Confirm-Continue
@@ -661,6 +664,15 @@ function Invoke-WingetListCommand
 
 function Get-WingetPythonLines
 {
+    param(
+        [switch]$Refresh
+    )
+
+    if (-not $Refresh -and $null -ne $script:WingetPythonLinesCache)
+    {
+        return $script:WingetPythonLinesCache
+    }
+
     $wingetResult = Invoke-WingetListCommand -ArgumentSets @(
         @{
             Args = @('list', 'python', '--accept-source-agreements', '--disable-interactivity')
@@ -681,7 +693,8 @@ function Get-WingetPythonLines
         return @()
     }
 
-    return @($wingetResult.Output | Where-Object { $_ -match '^\s*Python' })
+    $script:WingetPythonLinesCache = @($wingetResult.Output | Where-Object { $_ -match '^\s*Python' })
+    return $script:WingetPythonLinesCache
 }
 
 function Validate-WingetPythonSources
@@ -692,7 +705,7 @@ function Validate-WingetPythonSources
 
     Write-Output "[+] Checking Python packages via winget ($StageDescription)"
 
-    $pythonLines = Get-WingetPythonLines
+    $pythonLines = Get-WingetPythonLines -Refresh
 
     if ($pythonLines.Count -eq 0)
     {
@@ -925,222 +938,289 @@ function Assert-PythonModuleInstalled
     }
 }
 
-function Install-Python39
+function Get-PythonRuntimeInfo
 {
-    Write-Output "    2. Python 3.9.13 (32-bit and 64-bit)"
+    param(
+        [string]$Selector,
+        [string]$PythonRoot,
+        [string]$ExpectedVersionPrefix,
+        [string]$Label,
+        [string]$WingetVersionMatch
+    )
 
-    $python32Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python32Root + '"'
-    $python64Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python64Root + '"'
+    Write-Output "       Checking for $Label"
 
-    if (-not (Test-Path $python32Exe -PathType Leaf))
+    $wingetLines = Get-WingetPythonLines
+    $matchingWingetLines = @()
+    if ($WingetVersionMatch)
     {
-        try
+        $matchingWingetLines = @($wingetLines | Where-Object { $_ -match [regex]::Escape($WingetVersionMatch) })
+    }
+
+    $pythonExe = $null
+    $pythonHome = $null
+    $detectedVersion = $null
+
+    try
+    {
+        $launcherOutput = @(& py $Selector -c "import os, sys; print(sys.executable); print(sys.version.split()[0]); print(os.path.dirname(os.path.dirname(sys.executable)))" 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $launcherOutput.Count -ge 3)
         {
-            Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python32installer) -Arguments $python32Args -Description "Installing Python 3.9.13 32-bit"
+            $pythonExe = $launcherOutput[0].Trim()
+            $detectedVersion = $launcherOutput[1].Trim()
+            $pythonHome = $launcherOutput[2].Trim()
         }
-        catch
+    }
+    catch
+    {
+        $pythonExe = $null
+        $pythonHome = $null
+        $detectedVersion = $null
+    }
+
+    if (-not $pythonExe)
+    {
+        $fallbackExe = Join-Path $PythonRoot "python.exe"
+        if (Test-Path $fallbackExe -PathType Leaf)
         {
-            Write-Output "*** Python 3.9.13 32-bit install failed, continuing"
+            $pythonExe = $fallbackExe
+            $pythonHome = $PythonRoot
+
+            try
+            {
+                $detectedVersion = (& $pythonExe -c "import sys; print(sys.version.split()[0])" 2>$null | Select-Object -First 1)
+                if ($detectedVersion)
+                {
+                    $detectedVersion = $detectedVersion.Trim()
+                }
+            }
+            catch
+            {
+                $detectedVersion = $null
+            }
         }
+    }
+
+    if ($detectedVersion -and $detectedVersion -like "$ExpectedVersionPrefix*")
+    {
+        foreach ($line in $matchingWingetLines)
+        {
+            Write-Output "       winget: $line"
+        }
+        Write-Output "       Found $Label at $pythonExe ($detectedVersion)"
+        return [pscustomobject]@{
+            Found      = $true
+            Executable = $pythonExe
+            Root       = $pythonHome
+            Version    = $detectedVersion
+        }
+    }
+
+    if ($detectedVersion)
+    {
+        Write-Output "       $Label found, but version is $detectedVersion (expected $ExpectedVersionPrefix)"
+        if ($pythonExe)
+        {
+            Write-Output "       Path: $pythonExe"
+        }
+    }
+    elseif ($matchingWingetLines.Count -gt 0)
+    {
+        foreach ($line in $matchingWingetLines)
+        {
+            Write-Output "       winget: $line"
+        }
+        Write-Output "       $Label is reported by winget, but no matching interpreter path was resolved"
     }
     else
     {
-        Write-Output "       Python 3.9 32-bit already present, skipping"
+        Write-Output "       $Label not found"
     }
 
-    if (-not (Test-Path $python64Exe -PathType Leaf))
-    {
-        try
-        {
-            Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python64installer) -Arguments $python64Args -Description "Installing Python 3.9.13 64-bit"
-        }
-        catch
-        {
-            Write-Output "*** Python 3.9.13 64-bit install failed, continuing"
-        }
-    }
-    else
-    {
-        Write-Output "       Python 3.9 64-bit already present, skipping"
+    return [pscustomobject]@{
+        Found      = $false
+        Executable = $pythonExe
+        Root       = $pythonHome
+        Version    = $detectedVersion
     }
 }
 
-function Upgrade-Pip39
+function Get-PythonRuntimeChecked
 {
-    Write-Output "       Updating pip in Python 3.9 (x86/x64)"
+    param(
+        [string]$Selector,
+        [string]$PythonRoot,
+        [string]$ExpectedVersionPrefix,
+        [string]$WingetVersionMatch,
+        [string]$Label
+    )
 
-    if (Test-Path $python32Exe -PathType Leaf)
+    $runtime = Get-PythonRuntimeInfo -Selector $Selector -PythonRoot $PythonRoot -ExpectedVersionPrefix $ExpectedVersionPrefix -Label $Label -WingetVersionMatch $WingetVersionMatch
+    if (-not $runtime.Found)
     {
-        try
-        {
-            Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 32-bit"
-        }
-        catch
-        {
-            Write-Output "*** pip upgrade failed for Python 3.9 32-bit, continuing"
-        }
-    }
-    else
-    {
-        Write-Output "       Python 3.9 32-bit not found, skipping pip upgrade"
+        throw "Unable to resolve a valid interpreter for $Label"
     }
 
-    if (Test-Path $python64Exe -PathType Leaf)
+    return $runtime
+}
+
+function Get-UriLeafName
+{
+    param(
+        [string]$Uri
+    )
+
+    return [System.IO.Path]::GetFileName(([System.Uri]$Uri).AbsolutePath)
+}
+
+function Get-ExtractedWheelPath
+{
+    param(
+        [string]$ExtractPath,
+        [string]$WheelNamePattern,
+        [string]$Label
+    )
+
+    $allWheels = @(Get-ChildItem -Path $ExtractPath -Recurse -Filter "*.whl" -File -ErrorAction SilentlyContinue)
+    if ($allWheels.Count -eq 0)
     {
-        try
-        {
-            Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 64-bit"
-        }
-        catch
-        {
-            Write-Output "*** pip upgrade failed for Python 3.9 64-bit, continuing"
-        }
+        throw "Unable to locate a wheel file in $Label archive"
     }
-    else
+
+    $matchingWheels = @($allWheels | Where-Object { $_.Name -like $WheelNamePattern })
+    if ($matchingWheels.Count -eq 1)
     {
-        Write-Output "       Python 3.9 64-bit not found, skipping pip upgrade"
+        return $matchingWheels[0].FullName
+    }
+
+    if ($allWheels.Count -eq 1)
+    {
+        return $allWheels[0].FullName
+    }
+
+    throw "Unable to determine the correct wheel file in $Label archive"
+}
+
+function Install-Python314
+{
+    Write-Output "    2. Python 3.14.4 (32-bit and 64-bit)"
+
+    $python31432Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python31432Root + '"'
+    $python31464Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python31464Root + '"'
+
+    $python314x86 = Get-PythonRuntimeInfo -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 32-bit" -WingetVersionMatch "3.14"
+    if (-not $python314x86.Found)
+    {
+        Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python31432installer) -Arguments $python31432Args -Description "Installing Python 3.14.4 32-bit"
+    }
+
+    $python314x64 = Get-PythonRuntimeInfo -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 64-bit" -WingetVersionMatch "3.14"
+    if (-not $python314x64.Found)
+    {
+        Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python31464installer) -Arguments $python31464Args -Description "Installing Python 3.14.4 64-bit"
     }
 }
 
-function Install-PyKD39
+function Upgrade-Pip314
 {
-    Write-Output "       Installing PyKD via pip in Python 3.9 (x86/x64)"
+    Write-Output "       Updating pip in Python 3.14.4 (x86/x64)"
 
-    if (Test-Path $python32Exe -PathType Leaf)
-    {
-        try
-        {
-            if (Test-PythonModuleInstalled -PythonExe $python32Exe -ModuleName "pykd")
-            {
-                Write-Output "       PyKD already present for Python 3.9 32-bit, skipping pip install"
-            }
-            else
-            {
-                Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install pykd" -Description "Installing PyKD for Python 3.9 32-bit"
-            }
-            Assert-PythonModuleInstalled -PythonExe $python32Exe -ModuleName "pykd" -Label "Python 3.9 32-bit"
-        }
-        catch
-        {
-            Write-Output "*** PyKD install failed for Python 3.9 32-bit, continuing"
-        }
+    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
-        try
-        {
-            Ensure-Folder $engineExt32
-            Ensure-Folder $vcShared32
-
-            $msdia140Source = Find-Msdia140 -SearchRoot $python32Root
-            if ($msdia140Source)
-            {
-                Write-Output "       Copying msdia140.dll to $vcShared32"
-                Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force -ErrorAction Stop
-                Write-Output "       Registering msdia140.dll"
-                Register-DllSilent -DllPath $msdia140Target -Bitness x86 -ContinueOnMissing
-            }
-            else
-            {
-                Write-Output "       Unable to locate msdia140.dll for Python 3.9 32-bit, continuing"
-            }
-        }
-        catch
-        {
-            Write-Output "*** Failed to copy/register msdia140.dll for Python 3.9 32-bit, continuing"
-        }
-    }
-    else
-    {
-        Write-Output "       Python 3.9 32-bit not found, skipping PyKD install (x86)"
-    }
-
-    if (Test-Path $python64Exe -PathType Leaf)
-    {
-        try
-        {
-            if (Test-PythonModuleInstalled -PythonExe $python64Exe -ModuleName "pykd")
-            {
-                Write-Output "       PyKD already present for Python 3.9 64-bit, skipping pip install"
-            }
-            else
-            {
-                Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install pykd" -Description "Installing PyKD for Python 3.9 64-bit"
-            }
-            Assert-PythonModuleInstalled -PythonExe $python64Exe -ModuleName "pykd" -Label "Python 3.9 64-bit"
-        }
-        catch
-        {
-            Write-Output "*** PyKD install failed for Python 3.9 64-bit, continuing"
-        }
-
-        try
-        {
-            Ensure-Folder $engineExt64
-
-            Write-Output "       Registering msdia100.dll 64-bit (continue if missing)"
-            Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
-
-            Write-Output "       Registering msdia120.dll (continue if missing)"
-            Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
-        }
-        catch
-        {
-            Write-Output "*** Failed to register DIA DLLs for Python 3.9 64-bit, continuing"
-        }
-    }
-    else
-    {
-        Write-Output "       Python 3.9 64-bit not found, skipping PyKD install (x64)"
-    }
+    Run-ProcessChecked -FilePath $python314x86.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.14.4 32-bit"
+    Run-ProcessChecked -FilePath $python314x64.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.14.4 64-bit"
 }
 
-function Install-KeystoneEngine39
+function Install-PyKD314
 {
-    Write-Output "       Installing keystone-engine via pip in Python 3.9 (x86/x64)"
+    Write-Output "       Installing PyKD for Python 3.14.4 (x86/x64)"
 
-    if (Test-Path $python32Exe -PathType Leaf)
+    $pykd314X86Zip = Join-Path $env:tempfolder $env:pykd314X86File
+    $pykd314X64Zip = Join-Path $env:tempfolder $env:pykd314X64File
+    $pykd314X86Extract = Join-Path $env:tempfolder "pykd-cp314-win32"
+    $pykd314X64Extract = Join-Path $env:tempfolder "pykd-cp314-amd64"
+
+    if (-not (Test-Path $pykd314X86Zip -PathType Leaf))
     {
-        try
-        {
-            if (Test-PythonModuleInstalled -PythonExe $python32Exe -ModuleName "keystone")
-            {
-                Write-Output "       keystone already present for Python 3.9 32-bit, skipping pip install"
-            }
-            else
-            {
-                Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 32-bit"
-            }
-        }
-        catch
-        {
-            Write-Output "*** keystone-engine install failed for Python 3.9 32-bit, continuing"
-        }
+        Download-File -Uri $env:pykd314X86Url -OutFile $pykd314X86Zip -Label "Downloading PyKD cp314 x86 archive"
+    }
+    if (-not (Test-Path $pykd314X64Zip -PathType Leaf))
+    {
+        Download-File -Uri $env:pykd314X64Url -OutFile $pykd314X64Zip -Label "Downloading PyKD cp314 x64 archive"
+    }
+
+    Remove-Item -Path $pykd314X86Extract -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $pykd314X64Extract -Recurse -Force -ErrorAction SilentlyContinue
+    Ensure-Folder $pykd314X86Extract
+    Ensure-Folder $pykd314X64Extract
+
+    Write-Output "       Extracting PyKD cp314 x86"
+    Expand-Archive -Path $pykd314X86Zip -DestinationPath $pykd314X86Extract -Force
+
+    Write-Output "       Extracting PyKD cp314 x64"
+    Expand-Archive -Path $pykd314X64Zip -DestinationPath $pykd314X64Extract -Force
+
+    $pykd314Wheel32 = Get-ExtractedWheelPath -ExtractPath $pykd314X86Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x86"
+    $pykd314Wheel64 = Get-ExtractedWheelPath -ExtractPath $pykd314X64Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x64"
+    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+
+    Write-Output "       Using wheel: $pykd314Wheel32"
+    Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit"
+    Assert-PythonModuleInstalled -PythonExe $python314x86.Executable -ModuleName "pykd" -Label "Python 3.14.4 32-bit"
+
+    Write-Output "       Using wheel: $pykd314Wheel64"
+    Run-ProcessChecked -FilePath $python314x64.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel64 + '"') -Description "Installing PyKD for Python 3.14.4 64-bit"
+    Assert-PythonModuleInstalled -PythonExe $python314x64.Executable -ModuleName "pykd" -Label "Python 3.14.4 64-bit"
+
+    Ensure-Folder $engineExt32
+    Ensure-Folder $engineExt64
+    Ensure-Folder $vcShared32
+
+    $msdia140Source = Find-Msdia140 -SearchRoot $python314x86.Root
+    if ($msdia140Source)
+    {
+        Write-Output "       Copying msdia140.dll to $vcShared32"
+        Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force -ErrorAction Stop
+        Write-Output "       Registering msdia140.dll"
+        Register-DllSilent -DllPath $msdia140Target -Bitness x86 -ContinueOnMissing
     }
     else
     {
-        Write-Output "       Python 3.9 32-bit not found, skipping keystone-engine install (x86)"
+        Write-Output "       Unable to locate msdia140.dll for Python 3.14.4 32-bit, continuing"
     }
 
-    if (Test-Path $python64Exe -PathType Leaf)
+    Write-Output "       Registering msdia100.dll 64-bit (continue if missing)"
+    Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
+
+    Write-Output "       Registering msdia120.dll (continue if missing)"
+    Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
+}
+
+function Install-KeystoneEngine314
+{
+    Write-Output "       Installing keystone-engine via pip in Python 3.14.4 (x86/x64)"
+
+    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+
+    if (Test-PythonModuleInstalled -PythonExe $python314x86.Executable -ModuleName "keystone")
     {
-        try
-        {
-            if (Test-PythonModuleInstalled -PythonExe $python64Exe -ModuleName "keystone")
-            {
-                Write-Output "       keystone already present for Python 3.9 64-bit, skipping pip install"
-            }
-            else
-            {
-                Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 64-bit"
-            }
-        }
-        catch
-        {
-            Write-Output "*** keystone-engine install failed for Python 3.9 64-bit, continuing"
-        }
+        Write-Output "       keystone already present for Python 3.14.4 32-bit, skipping pip install"
     }
     else
     {
-        Write-Output "       Python 3.9 64-bit not found, skipping keystone-engine install (x64)"
+        Run-ProcessChecked -FilePath $python314x86.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.14.4 32-bit"
+    }
+
+    if (Test-PythonModuleInstalled -PythonExe $python314x64.Executable -ModuleName "keystone")
+    {
+        Write-Output "       keystone already present for Python 3.14.4 64-bit, skipping pip install"
+    }
+    else
+    {
+        Run-ProcessChecked -FilePath $python314x64.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.14.4 64-bit"
     }
 }
 
@@ -1242,11 +1322,11 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    1. Python 2.7.18"
     [void](Download-File -Uri $env:pythonUrl -OutFile (Join-Path $env:tempfolder $env:pythonfile) -Label "Downloading Python 2.7.18")
 
-    Write-Output "    2. Python 3.9.13 (32-bit)"
-    [void](Download-File -Uri $env:python32Url -OutFile (Join-Path $env:tempfolder $env:python32installer) -Label "Downloading Python 3.9.13 32-bit")
+    Write-Output "    2. Python 3.14.4 (32-bit)"
+    [void](Download-File -Uri $env:python31432Url -OutFile (Join-Path $env:tempfolder $env:python31432installer) -Label "Downloading Python 3.14.4 32-bit")
 
-    Write-Output "    3. Python 3.9.13 (64-bit)"
-    [void](Download-File -Uri $env:python64Url -OutFile (Join-Path $env:tempfolder $env:python64installer) -Label "Downloading Python 3.9.13 64-bit")
+    Write-Output "    3. Python 3.14.4 (64-bit)"
+    [void](Download-File -Uri $env:python31464Url -OutFile (Join-Path $env:tempfolder $env:python31464installer) -Label "Downloading Python 3.14.4 64-bit")
 
     Write-Output "    4. Classic WinDBG"
     [void](Download-File -Uri $env:windbgUrl -OutFile (Join-Path $env:tempfolder $env:windbgfile) -Label "Downloading Classic WinDBG")
@@ -1257,19 +1337,25 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    6. PyKD extension package (x64)"
     [void](Download-File -Uri $env:pykdExtX64Url -OutFile (Join-Path $env:tempfolder $env:pykdExtX64File) -Label "Downloading PyKD extension package (x64)")
 
-    Write-Output "    7. mona.py"
+    Write-Output "    7. PyKD cp314 package (x86)"
+    [void](Download-File -Uri $env:pykd314X86Url -OutFile (Join-Path $env:tempfolder $env:pykd314X86File) -Label "Downloading PyKD cp314 package (x86)")
+
+    Write-Output "    8. PyKD cp314 package (x64)"
+    [void](Download-File -Uri $env:pykd314X64Url -OutFile (Join-Path $env:tempfolder $env:pykd314X64File) -Label "Downloading PyKD cp314 package (x64)")
+
+    Write-Output "    9. mona.py"
     [void](Download-FileWithFallbackUrls -Uris @($env:monaUrl, $env:monaBackupUrl) -OutFile (Join-Path $env:tempfolder $env:monafile) -Label "Downloading mona.py")
 
-    Write-Output "    8. windbglib.py"
+    Write-Output "    10. windbglib.py"
     [void](Download-FileWithFallbackUrls -Uris @($env:windbglibUrl, $env:windbglibBackupUrl) -OutFile (Join-Path $env:tempfolder $env:windbglibfile) -Label "Downloading windbglib.py")
 
-    Write-Output "    9. Visual Studio 2017 Desktop Express"
+    Write-Output "    11. Visual Studio 2017 Desktop Express"
     [void](Download-File -Uri $env:vscommunityUrl -OutFile (Join-Path $env:tempfolder $env:vscommunityfile) -Label "Downloading Visual Studio 2017 Desktop Express")
 
-    Write-Output "    10. VC++ Redistributable (x86)"
+    Write-Output "    12. VC++ Redistributable (x86)"
     [void](Download-File -Uri $env:vcredistUrl -OutFile (Join-Path $env:tempfolder $env:vcredistfile) -Label "Downloading VC++ Redistributable (x86)")
 
-    Write-Output "    11. VC++ 2010 SP1 Redistributable (x86)"
+    Write-Output "    13. VC++ 2010 SP1 Redistributable (x86)"
     [void](Download-File -Uri $env:vc2010redistUrl -OutFile (Join-Path $env:tempfolder $env:vc2010redistfile) -Label "Downloading VC++ 2010 SP1 Redistributable (x86)")
 
 
@@ -1323,21 +1409,21 @@ if (Test-Path $env:tempfolder -PathType Container)
         Assert-PythonModuleInstalled -PythonExe "C:\Python27\python.exe" -ModuleName "pykd" -Label "Python 2.7.18"
     }
 
-    Invoke-NonFatalStep "Install Python 3.9.13 (x86/x64)" {
-        Install-Python39
+    Invoke-NonFatalStep "Install Python 3.14.4 (x86/x64)" {
+        Install-Python314
     }
     if ($wingetAvailable)
     {
         [void](Validate-WingetPythonSources -StageDescription "after Python install")
     }
-    Invoke-NonFatalStep "Upgrade pip in Python 3.9 (x86/x64)" {
-        Upgrade-Pip39
+    Invoke-NonFatalStep "Upgrade pip in Python 3.14.4 (x86/x64)" {
+        Upgrade-Pip314
     }
-    Invoke-NonFatalStep "Install PyKD in Python 3.9 (x86/x64)" {
-        Install-PyKD39
+    Invoke-NonFatalStep "Install PyKD in Python 3.14.4 (x86/x64)" {
+        Install-PyKD314
     }
-    Invoke-NonFatalStep "Install keystone-engine in Python 3.9 (x86/x64)" {
-        Install-KeystoneEngine39
+    Invoke-NonFatalStep "Install keystone-engine in Python 3.14.4 (x86/x64)" {
+        Install-KeystoneEngine314
     }
     Invoke-NonFatalStep "Install keystone-engine in Python 2.7" {
         Install-KeystoneEngine27
@@ -1351,8 +1437,21 @@ if (Test-Path $env:tempfolder -PathType Container)
         Start-Process (Join-Path $env:tempfolder $env:vc2010redistfile) -Wait -ArgumentList '/quiet /norestart' -ErrorAction Stop
     }
 
+    $python314x86ForMsdia = $null
+    try
+    {
+        $python314x86ForMsdia = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    }
+    catch
+    {
+        $python314x86ForMsdia = $null
+    }
 
-    $msdia140Source = Find-Msdia140 -SearchRoot $python32Root
+    $msdia140Source = $null
+    if ($python314x86ForMsdia)
+    {
+        $msdia140Source = Find-Msdia140 -SearchRoot $python314x86ForMsdia.Root
+    }
     if (-not $msdia140Source)
     {
         $pykdPydPath = Find-PyKDPyd -SitePackagesPath "C:\\Python27\\Lib\\site-packages"
@@ -1521,9 +1620,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "[+] Launching WinDBG to check if everything is ok"
     Write-Output "    ==> Please check the WinDBG log window and confirm that:"
     Write-Output "        - the !peb command didn't produce an error message"
-    Write-Output "        - the !py -3.9 C:\Tools\mona3\mona.py command resulted in a list of available mona commands"
+    Write-Output "        - the !py -3.14-32 C:\Tools\mona3\mona.py command resulted in a list of available mona commands"
     Invoke-NonFatalStep "Launch WinDBG validation session" {
-        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -3.9 C:\Tools\mona3\mona.py config -set workingfolder c:\logs\%p; !peb; !py -3.9 C:\Tools\mona3\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
+        Start-Process (Join-Path $classicDbgBase 'x86\windbg') -ArgumentList '-c ".load pykd; !py -3.14-32 C:\Tools\mona3\mona.py config -set workingfolder c:\logs\%p; !peb; !py -3.14-32 C:\Tools\mona3\mona.py" -o "c:\windows\system32\calc.exe"' -ErrorAction Stop
     }
 
     Write-Output "[+] Removing temporary folder again"
@@ -1536,9 +1635,10 @@ if (Test-Path $env:tempfolder -PathType Container)
     Write-Output "    In WinDBG(X) run:"
     Write-Output ""
     Write-Output "      !load pykd"
-    Write-Output "      as !mona !py -3.9 C:\Tools\mona3\mona.py"
+    Write-Output "      x86: as !mona !py -3.14-32 C:\Tools\mona3\mona.py"
+    Write-Output "      x64: as !mona !py -3.14-64 C:\Tools\mona3\mona.py"
     Write-Output ""
-    Write-Output '    Or run windbg.exe (windbgx.exe) with argument -c "!load pykd; as !mona !py -3.9 C:\Tools\mona3\mona.py"'
+    Write-Output '    Or run windbg.exe (windbgx.exe) with argument -c "!load pykd; as !mona !py -3.14-32 C:\Tools\mona3\mona.py"'
     Write-Output "    After that you can simply run '!mona' at the WinDBG(X) command line."
     Write-Output ""
     Write-Output "[+] Reboot your VM, and wait for updates to be installed if needed"

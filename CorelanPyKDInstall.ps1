@@ -6,7 +6,7 @@
 # www.corelan-certified.com
 # www.corelan.be
 #
-# PowerShell script to install Python3.9, Python3.14.4 and PyKD versions that are compatible with Python3
+# PowerShell script to install Python3.14.4 and PyKD versions that are compatible with Python3
 # for WinDBG Classic and WinDBGX on Windows 10/11
 
 # DO NOT RUN THIS ON WINDOWS 7
@@ -14,14 +14,10 @@
 $ErrorActionPreference = "Stop"
 
 $env:tempfolder                = "C:\corelantemp"
-$env:python32installer         = "python-3.9.13.exe"
-$env:python64installer         = "python-3.9.13-amd64.exe"
 $env:python31432installer      = "python-3.14.4.exe"
 $env:python31464installer      = "python-3.14.4-amd64.exe"
 $env:vc2010redistfile          = "vc2010_runtime_redist_x86.exe"
 
-$python32Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
-$python64Url                   = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
 $python31432Url                = "https://www.python.org/ftp/python/3.14.4/python-3.14.4.exe"
 $python31464Url                = "https://www.python.org/ftp/python/3.14.4/python-3.14.4-amd64.exe"
 $vc2010redistUrl               = "https://github.com/corelan/CorelanTraining/raw/refs/heads/master/runtimes/vc2010_runtime_redist_x86.exe"
@@ -35,13 +31,8 @@ $engineExt64                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensio
 $engineExt32                   = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
 $userExtensions                = Join-Path $env:USERPROFILE "AppData\dbg\UserExtensions"
 
-$python32Root                  = Join-Path $env:LOCALAPPDATA "Programs\Python\Python39-32"
-$python64Root                  = Join-Path $env:LOCALAPPDATA "Programs\Python\Python39"
 $python31432Root               = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314-32"
 $python31464Root               = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314"
-
-$python32SitePackages          = Join-Path $python32Root "Lib\site-packages"
-$python64SitePackages          = Join-Path $python64Root "Lib\site-packages"
 
 $vcShared32                    = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
 $msdia140Target                = Join-Path $vcShared32 "msdia140.dll"
@@ -998,39 +989,13 @@ function Assert-PythonModuleInstalled
     }
 }
 
-function Install-Python39
-{
-    Write-Output "[+] Installing Python 3.9.13 (32-bit and 64-bit)"
-
-    $python32Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python32Root + '"'
-    $python64Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python64Root + '"'
-
-    $python39x86 = Get-PythonRuntimeInfo -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -Label "Python 3.9.13 32-bit" -WingetVersionMatch "3.9"
-    if (-not $python39x86.Found)
-    {
-        Download-File -Uri $python32Url -OutFile (Join-Path $env:tempfolder $env:python32installer) -Label "Python 3.9.13 32-bit installer"
-        Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python32installer) -Arguments $python32Args -Description "Installing Python 3.9.13 32-bit"
-    }
-
-    $python39x64 = Get-PythonRuntimeInfo -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -Label "Python 3.9.13 64-bit" -WingetVersionMatch "3.9"
-    if (-not $python39x64.Found)
-    {
-        Download-File -Uri $python64Url -OutFile (Join-Path $env:tempfolder $env:python64installer) -Label "Python 3.9.13 64-bit installer"
-        Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python64installer) -Arguments $python64Args -Description "Installing Python 3.9.13 64-bit"
-    }
-}
-
 function Upgrade-Pip
 {
     Write-Output "[+] Updating pip"
 
-    $python39x86 = Get-PythonRuntimeChecked -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 32-bit"
-    $python39x64 = Get-PythonRuntimeChecked -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 64-bit"
     $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
     $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
-    Run-ProcessChecked -FilePath $python39x86.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 32-bit"
-    Run-ProcessChecked -FilePath $python39x64.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.9 64-bit"
     Run-ProcessChecked -FilePath $python314x86.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.14.4 32-bit"
     Run-ProcessChecked -FilePath $python314x64.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.14.4 64-bit"
 }
@@ -1038,41 +1003,11 @@ function Upgrade-Pip
 function Install-Keystone-engine
 {
     Write-Output "[+] Installing Keystone-Engine"
-    $python39x86 = Get-PythonRuntimeChecked -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 32-bit"
-    $python39x64 = Get-PythonRuntimeChecked -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 64-bit"
     $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
     $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
-    Run-ProcessChecked -FilePath $python39x86.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 32-bit"
-    Run-ProcessChecked -FilePath $python39x64.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.9 64-bit"
     Run-ProcessChecked -FilePath $python314x86.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.14.4 32-bit"
     Run-ProcessChecked -FilePath $python314x64.Executable -Arguments "-m pip install keystone-engine" -Description "Installing keystone-engine for Python 3.14.4 64-bit"
-}
-
-function Install-PyKD32
-{
-    Write-Output "[+] Installing PyKD 32-bit"
-
-    $python39x86 = Get-PythonRuntimeChecked -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 32-bit"
-
-    Run-ProcessChecked -FilePath $python39x86.Executable -Arguments "-m pip install pykd" -Description "Installing PyKD with pip for Python 3.9 32-bit"
-    Assert-PythonModuleInstalled -PythonExe $python39x86.Executable -ModuleName "pykd" -Label "Python 3.9.13 32-bit"
-
-    Ensure-Folder $engineExt32
-    Ensure-Folder $vcShared32
-
-    $msdia140Source = Find-Msdia140 -SearchRoot $python39x86.Root
-    if (-not $msdia140Source)
-    {
-        Write-Output "*** Unable to locate msdia140.dll for Python 3.9 32-bit"
-        exit 1
-    }
-
-    Write-Output "    Copying msdia140.dll to $vcShared32"
-    Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force
-
-    Write-Output "    Registering msdia140.dll"
-    Register-DllSilent -DllPath $msdia140Target -Bitness x86
 }
 
 function Install-VCRuntime2010
@@ -1082,24 +1017,6 @@ function Install-VCRuntime2010
     Invoke-NonFatalStep "Install VC++ 2010 Redistributable (x86)" {
         Start-Process (Join-Path $env:tempfolder $env:vc2010redistfile) -Wait -ArgumentList '/quiet /norestart' -ErrorAction Stop
     }
-}
-
-function Install-PyKD64
-{
-    Write-Output "[+] Installing PyKD 64-bit"
-
-    $python39x64 = Get-PythonRuntimeChecked -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 64-bit"
-
-    Run-ProcessChecked -FilePath $python39x64.Executable -Arguments "-m pip install pykd" -Description "Installing PyKD with pip for Python 3.9 64-bit"
-    Assert-PythonModuleInstalled -PythonExe $python39x64.Executable -ModuleName "pykd" -Label "Python 3.9.13 64-bit"
-
-    Ensure-Folder $engineExt64
-
-    Write-Output "    Registering msdia100.dll (continue if missing)"
-    Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
-
-    Write-Output "    Registering msdia120.dll (continue if missing)"
-    Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
 }
 
 function Install-Python314
@@ -1162,6 +1079,29 @@ function Install-PyKD314
     Write-Output "    Using wheel: $pykd314Wheel64"
     Run-ProcessChecked -FilePath $python314x64.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel64 + '"') -Description "Installing PyKD for Python 3.14.4 64-bit"
     Assert-PythonModuleInstalled -PythonExe $python314x64.Executable -ModuleName "pykd" -Label "Python 3.14.4 64-bit"
+
+    Ensure-Folder $engineExt32
+    Ensure-Folder $engineExt64
+    Ensure-Folder $vcShared32
+
+    $msdia140Source = Find-Msdia140 -SearchRoot $python314x86.Root
+    if (-not $msdia140Source)
+    {
+        Write-Output "*** Unable to locate msdia140.dll for Python 3.14.4 32-bit"
+        exit 1
+    }
+
+    Write-Output "    Copying msdia140.dll to $vcShared32"
+    Copy-Item -Path $msdia140Source -Destination $msdia140Target -Force
+
+    Write-Output "    Registering msdia140.dll"
+    Register-DllSilent -DllPath $msdia140Target -Bitness x86
+
+    Write-Output "    Registering msdia100.dll (continue if missing)"
+    Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
+
+    Write-Output "    Registering msdia120.dll (continue if missing)"
+    Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
 }
 
 
@@ -1299,7 +1239,6 @@ Validate-WingetPythonSources -StageDescription "before Python install"
 Write-Output "[+] Downloading installers"
 Download-File -Uri $vc2010redistUrl  -OutFile (Join-Path $env:tempfolder $env:vc2010redistfile)    -Label "VC++ 2010 SP1 Redistributable (x86)"
 
-Install-Python39
 Install-Python314
 Install-VCRuntime2010
 
@@ -1307,8 +1246,6 @@ Validate-WingetPythonSources -StageDescription "after Python install"
 
 Upgrade-Pip
 Install-Keystone-engine
-Install-PyKD32
-Install-PyKD64
 Install-PyKD314
 Install-Python27PyKD
 Install-PyKDExtensions
