@@ -411,6 +411,27 @@ function Remove-FileIfExists($path)
     }
 }
 
+function Write-CopiedFileLog
+{
+    param(
+        [string]$SourcePath,
+        [string]$DestinationPath,
+        [string]$Label
+    )
+
+    if (-not (Test-Path $DestinationPath -PathType Leaf))
+    {
+        Write-Output "*** $Label copy did not produce $DestinationPath"
+        exit 1
+    }
+
+    $copiedItem = Get-Item $DestinationPath -ErrorAction Stop
+    Write-Output "    $Label copied"
+    Write-Output "        Source      : $SourcePath"
+    Write-Output "        Destination : $DestinationPath"
+    Write-Output "        Size        : $($copiedItem.Length) bytes"
+}
+
 function Remove-ExistingPyKD
 {
     Write-Output "[+] Removing existing PyKD files"
@@ -853,6 +874,41 @@ function Get-ExtractedWheelPath
     exit 1
 }
 
+function Get-ExtractedFilePath
+{
+    param(
+        [string]$ExtractPath,
+        [string]$FileName,
+        [string]$Label
+    )
+
+    $directPath = Join-Path $ExtractPath $FileName
+    if (Test-Path $directPath -PathType Leaf)
+    {
+        return $directPath
+    }
+
+    $matches = @(Get-ChildItem -Path $ExtractPath -Recurse -Filter $FileName -File -ErrorAction SilentlyContinue |
+        Sort-Object { $_.FullName.Length }, FullName)
+
+    if ($matches.Count -eq 0)
+    {
+        Write-Output "*** Unable to locate $FileName in $Label archive"
+        exit 1
+    }
+
+    if ($matches.Count -gt 1)
+    {
+        Write-Output "    Multiple $FileName candidates found in $Label archive; using the shallowest match"
+        foreach ($match in $matches)
+        {
+            Write-Output "        $($match.FullName)"
+        }
+    }
+
+    return $matches[0].FullName
+}
+
 function Get-UriLeafName
 {
     param(
@@ -881,6 +937,65 @@ function Get-PythonRuntimeChecked
     }
 
     return $runtime
+}
+
+function Get-PythonModulePath
+{
+    param(
+        [string]$PythonExe,
+        [string]$ModuleName
+    )
+
+    if (-not (Test-Path $PythonExe -PathType Leaf))
+    {
+        return $null
+    }
+
+    try
+    {
+        $output = @(& $PythonExe -c "import importlib; module = importlib.import_module('$ModuleName'); print(getattr(module, '__file__', ''))" 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $output.Count -gt 0)
+        {
+            $modulePath = $output[0].Trim()
+            if (-not [string]::IsNullOrWhiteSpace($modulePath))
+            {
+                return $modulePath
+            }
+            return "<imported>"
+        }
+    }
+    catch
+    {
+        return $null
+    }
+
+    return $null
+}
+
+function Assert-PythonModuleInstalled
+{
+    param(
+        [string]$PythonExe,
+        [string]$ModuleName,
+        [string]$Label
+    )
+
+    $modulePath = Get-PythonModulePath -PythonExe $PythonExe -ModuleName $ModuleName
+    if (-not $modulePath)
+    {
+        Write-Output "*** Unable to import $ModuleName in $Label using $PythonExe"
+        exit 1
+    }
+
+    Write-Output "    Verified $ModuleName for $Label"
+    Write-Output "        Interpreter : $PythonExe"
+    Write-Output "        Module path : $modulePath"
+
+    if ($modulePath -ne "<imported>" -and (Test-Path $modulePath -PathType Leaf))
+    {
+        $moduleItem = Get-Item $modulePath -ErrorAction Stop
+        Write-Output "        Size        : $($moduleItem.Length) bytes"
+    }
 }
 
 function Install-Python39
@@ -941,6 +1056,7 @@ function Install-PyKD32
     $python39x86 = Get-PythonRuntimeChecked -Selector "-3.9-32" -PythonRoot $python32Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 32-bit"
 
     Run-ProcessChecked -FilePath $python39x86.Executable -Arguments "-m pip install pykd" -Description "Installing PyKD with pip for Python 3.9 32-bit"
+    Assert-PythonModuleInstalled -PythonExe $python39x86.Executable -ModuleName "pykd" -Label "Python 3.9.13 32-bit"
 
     Ensure-Folder $engineExt32
     Ensure-Folder $vcShared32
@@ -975,6 +1091,7 @@ function Install-PyKD64
     $python39x64 = Get-PythonRuntimeChecked -Selector "-3.9-64" -PythonRoot $python64Root -ExpectedVersionPrefix "3.9.13" -WingetVersionMatch "3.9" -Label "Python 3.9.13 64-bit"
 
     Run-ProcessChecked -FilePath $python39x64.Executable -Arguments "-m pip install pykd" -Description "Installing PyKD with pip for Python 3.9 64-bit"
+    Assert-PythonModuleInstalled -PythonExe $python39x64.Executable -ModuleName "pykd" -Label "Python 3.9.13 64-bit"
 
     Ensure-Folder $engineExt64
 
@@ -1039,10 +1156,12 @@ function Install-PyKD314
     $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Write-Output "    Using wheel: $pykd314Wheel32"
-    Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit" -ContinueOnError
+    Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit"
+    Assert-PythonModuleInstalled -PythonExe $python314x86.Executable -ModuleName "pykd" -Label "Python 3.14.4 32-bit"
 
     Write-Output "    Using wheel: $pykd314Wheel64"
-    Run-ProcessChecked -FilePath $python314x64.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel64 + '"') -Description "Installing PyKD for Python 3.14.4 64-bit" -ContinueOnError
+    Run-ProcessChecked -FilePath $python314x64.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel64 + '"') -Description "Installing PyKD for Python 3.14.4 64-bit"
+    Assert-PythonModuleInstalled -PythonExe $python314x64.Executable -ModuleName "pykd" -Label "Python 3.14.4 64-bit"
 }
 
 
@@ -1077,6 +1196,16 @@ function Install-Python27PyKD
     Invoke-NonFatalStep "Install PyKD via pip in Python 2.7" {
         Start-Process $pythonExe -Wait -ArgumentList '-m pip install --upgrade pykd' -ErrorAction Stop
     }
+    Invoke-NonFatalStep "Verify PyKD in Python 2.7" {
+        $modulePath = Get-PythonModulePath -PythonExe $pythonExe -ModuleName "pykd"
+        if (-not $modulePath)
+        {
+            throw "Unable to import pykd in Python 2.7 using $pythonExe"
+        }
+        Write-Output "       Verified pykd for Python 2.7"
+        Write-Output "           Interpreter : $pythonExe"
+        Write-Output "           Module path : $modulePath"
+    }
 
     Write-Output "       Installing keystone-engine via pip in Python 2.7"
     Invoke-NonFatalStep "Install keystone-engine via pip in Python 2.7" {
@@ -1109,29 +1238,21 @@ function Install-PyKDExtensions
     Write-Output "    Extracting PyKD-Ext x64"
     Expand-Archive -Path $pykdExtX64Zip -DestinationPath $pykdExtX64Extract -Force
 
-    $pykdDllX86 = Join-Path $pykdExtX86Extract "pykd.dll"
-    $pykdDllX64 = Join-Path $pykdExtX64Extract "pykd.dll"
-
-    if (-not (Test-Path $pykdDllX86 -PathType Leaf))
-    {
-        Write-Output "*** Unable to locate x86 pykd.dll in PyKD-Ext archive"
-        exit 1
-    }
-
-    if (-not (Test-Path $pykdDllX64 -PathType Leaf))
-    {
-        Write-Output "*** Unable to locate x64 pykd.dll in PyKD-Ext archive"
-        exit 1
-    }
+    $pykdDllX86 = Get-ExtractedFilePath -ExtractPath $pykdExtX86Extract -FileName "pykd.dll" -Label "PyKD-Ext x86"
+    $pykdDllX64 = Get-ExtractedFilePath -ExtractPath $pykdExtX64Extract -FileName "pykd.dll" -Label "PyKD-Ext x64"
 
     Ensure-Folder $engineExt32
     Ensure-Folder $engineExt64
 
-    Write-Output "    Copying x86 pykd.dll to $engineExt32"
-    Copy-Item -Path $pykdDllX86 -Destination (Join-Path $engineExt32 "pykd.dll") -Force
+    $pykdDllX86Destination = Join-Path $engineExt32 "pykd.dll"
+    Write-Output "    Copying x86 pykd.dll from $pykdDllX86 to $pykdDllX86Destination"
+    Copy-Item -Path $pykdDllX86 -Destination $pykdDllX86Destination -Force
+    Write-CopiedFileLog -SourcePath $pykdDllX86 -DestinationPath $pykdDllX86Destination -Label "x86 pykd.dll"
 
-    Write-Output "    Copying x64 pykd.dll to $engineExt64"
-    Copy-Item -Path $pykdDllX64 -Destination (Join-Path $engineExt64 "pykd.dll") -Force
+    $pykdDllX64Destination = Join-Path $engineExt64 "pykd.dll"
+    Write-Output "    Copying x64 pykd.dll from $pykdDllX64 to $pykdDllX64Destination"
+    Copy-Item -Path $pykdDllX64 -Destination $pykdDllX64Destination -Force
+    Write-CopiedFileLog -SourcePath $pykdDllX64 -DestinationPath $pykdDllX64Destination -Label "x64 pykd.dll"
 }
 
 function Show-CorelanBanner

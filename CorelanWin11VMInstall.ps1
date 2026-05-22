@@ -444,6 +444,51 @@ function Find-PyKDPyd
     return $null
 }
 
+function Find-ExtractedFile
+{
+    param(
+        [string]$SearchRoot,
+        [string]$FileName
+    )
+
+    $directPath = Join-Path $SearchRoot $FileName
+    if (Test-Path $directPath -PathType Leaf)
+    {
+        return $directPath
+    }
+
+    $found = Get-ChildItem -Path $SearchRoot -Recurse -Filter $FileName -File -ErrorAction SilentlyContinue |
+        Sort-Object { $_.FullName.Length }, FullName |
+        Select-Object -First 1
+
+    if ($found)
+    {
+        return $found.FullName
+    }
+
+    return $null
+}
+
+function Write-CopiedFileLog
+{
+    param(
+        [string]$SourcePath,
+        [string]$DestinationPath,
+        [string]$Label
+    )
+
+    if (-not (Test-Path $DestinationPath -PathType Leaf))
+    {
+        throw "$Label copy did not produce $DestinationPath"
+    }
+
+    $copiedItem = Get-Item $DestinationPath -ErrorAction Stop
+    Write-Output "       $Label copied"
+    Write-Output "          Source      : $SourcePath"
+    Write-Output "          Destination : $DestinationPath"
+    Write-Output "          Size        : $($copiedItem.Length) bytes"
+}
+
 function Find-Msdia140
 {
     param(
@@ -814,14 +859,69 @@ function Test-PythonModuleInstalled
         return $false
     }
 
+    return ($null -ne (Get-PythonModulePath -PythonExe $PythonExe -ModuleName $ModuleName))
+}
+
+function Get-PythonModulePath
+{
+    param(
+        [string]$PythonExe,
+        [string]$ModuleName
+    )
+
+    if (-not (Test-Path $PythonExe -PathType Leaf))
+    {
+        return $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ModuleName))
+    {
+        return $null
+    }
+
     try
     {
-        & $PythonExe -c "import $ModuleName" 2>$null | Out-Null
-        return ($LASTEXITCODE -eq 0)
+        $output = @(& $PythonExe -c "import importlib; module = importlib.import_module('$ModuleName'); print(getattr(module, '__file__', ''))" 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $output.Count -gt 0)
+        {
+            $modulePath = $output[0].Trim()
+            if (-not [string]::IsNullOrWhiteSpace($modulePath))
+            {
+                return $modulePath
+            }
+            return "<imported>"
+        }
     }
     catch
     {
-        return $false
+        return $null
+    }
+
+    return $null
+}
+
+function Assert-PythonModuleInstalled
+{
+    param(
+        [string]$PythonExe,
+        [string]$ModuleName,
+        [string]$Label
+    )
+
+    $modulePath = Get-PythonModulePath -PythonExe $PythonExe -ModuleName $ModuleName
+    if (-not $modulePath)
+    {
+        throw "Unable to import $ModuleName in $Label using $PythonExe"
+    }
+
+    Write-Output "       Verified $ModuleName for $Label"
+    Write-Output "          Interpreter : $PythonExe"
+    Write-Output "          Module path : $modulePath"
+
+    if ($modulePath -ne "<imported>" -and (Test-Path $modulePath -PathType Leaf))
+    {
+        $moduleItem = Get-Item $modulePath -ErrorAction Stop
+        Write-Output "          Size        : $($moduleItem.Length) bytes"
     }
 }
 
@@ -918,6 +1018,7 @@ function Install-PyKD39
             {
                 Run-ProcessChecked -FilePath $python32Exe -Arguments "-m pip install pykd" -Description "Installing PyKD for Python 3.9 32-bit"
             }
+            Assert-PythonModuleInstalled -PythonExe $python32Exe -ModuleName "pykd" -Label "Python 3.9 32-bit"
         }
         catch
         {
@@ -964,6 +1065,7 @@ function Install-PyKD39
             {
                 Run-ProcessChecked -FilePath $python64Exe -Arguments "-m pip install pykd" -Description "Installing PyKD for Python 3.9 64-bit"
             }
+            Assert-PythonModuleInstalled -PythonExe $python64Exe -ModuleName "pykd" -Label "Python 3.9 64-bit"
         }
         catch
         {
@@ -1217,6 +1319,9 @@ if (Test-Path $env:tempfolder -PathType Container)
     Invoke-NonFatalStep "Install PyKD via pip in Python 2.7.18" {
         Start-Process "C:\Python27\python.exe" -Wait -ArgumentList '-m pip install --upgrade pykd' -ErrorAction Stop
     }
+    Invoke-NonFatalStep "Verify PyKD in Python 2.7.18" {
+        Assert-PythonModuleInstalled -PythonExe "C:\Python27\python.exe" -ModuleName "pykd" -Label "Python 2.7.18"
+    }
 
     Invoke-NonFatalStep "Install Python 3.9.13 (x86/x64)" {
         Install-Python39
@@ -1328,12 +1433,28 @@ if (Test-Path $env:tempfolder -PathType Container)
 
     Write-Output "       b. Installing pykd.dll in WinDBG engine/extensions x86 folder"
     Invoke-NonFatalStep "Install pykd.dll in debugger extension search path x86 (EngineExtensions32)" {
-        Copy-Item -Path "$env:tempfolder\pykd-ext-x86\pykd.dll" -Destination (Join-Path $engineExt32 'pykd.dll') -Force -ErrorAction Stop
+        $pykdDllX86 = Find-ExtractedFile -SearchRoot "$env:tempfolder\pykd-ext-x86" -FileName 'pykd.dll'
+        if (-not $pykdDllX86)
+        {
+            throw "Unable to locate x86 pykd.dll in $env:tempfolder\pykd-ext-x86"
+        }
+        $pykdDllX86Destination = Join-Path $engineExt32 'pykd.dll'
+        Write-Output "          Copying from $pykdDllX86 to $pykdDllX86Destination"
+        Copy-Item -Path $pykdDllX86 -Destination $pykdDllX86Destination -Force -ErrorAction Stop
+        Write-CopiedFileLog -SourcePath $pykdDllX86 -DestinationPath $pykdDllX86Destination -Label 'x86 pykd.dll'
     }
 
     Write-Output "       c. Installing pykd.dll in WinDBG engine/extensions x64 folder"
     Invoke-NonFatalStep "Install pykd.dll in debugger extension search path x64 (EngineExtensions)" {
-        Copy-Item -Path "$env:tempfolder\pykd-ext-x64\pykd.dll" -Destination (Join-Path $engineExt64 'pykd.dll') -Force -ErrorAction Stop
+        $pykdDllX64 = Find-ExtractedFile -SearchRoot "$env:tempfolder\pykd-ext-x64" -FileName 'pykd.dll'
+        if (-not $pykdDllX64)
+        {
+            throw "Unable to locate x64 pykd.dll in $env:tempfolder\pykd-ext-x64"
+        }
+        $pykdDllX64Destination = Join-Path $engineExt64 'pykd.dll'
+        Write-Output "          Copying from $pykdDllX64 to $pykdDllX64Destination"
+        Copy-Item -Path $pykdDllX64 -Destination $pykdDllX64Destination -Force -ErrorAction Stop
+        Write-CopiedFileLog -SourcePath $pykdDllX64 -DestinationPath $pykdDllX64Destination -Label 'x64 pykd.dll'
     }
 
     if (Test-Path $env:immunitypycommandsfolder -PathType Container)
