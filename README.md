@@ -23,7 +23,7 @@ Make sure to run scripts from an administrator prompt.
 3. Verify that you have a working internet connection.
 4. Run `powershell ./CorelanWin11VMInstall.ps1`.
 5. If all goes well, the script will:
-   - Download installers for Python 2.7.18, Python 3.9.13, WinDBG, WinDBGX, PyKD, `mona.py`, `windbglib.py`, and Visual Studio 2017 Desktop Express.
+   - Download installers for Python 2.7.18, Python 3.14.4, WinDBG, WinDBGX, PyKD, `mona.py`, `windbglib.py`, and Visual Studio 2017 Desktop Express.
    - Install `winget` if needed.
    - Install the required prerequisites, libraries and applications.
    - Install WinDBGX, Visual Studio Code, and 7-Zip via `winget`.
@@ -33,7 +33,7 @@ Make sure to run scripts from an administrator prompt.
 
 ## PyKD for Windows 10/11
 
-This script installs Python 3.9.13, 3.14.4, and a PyKD + PyKD-Ext version that is compatible with both Python 3 and Python 2.
+This script installs Python 3.14.4, and a PyKD + PyKD-Ext version that is compatible with both Python 3 and Python 2.
 It also installs the `keystone-engine` library
 
 Please keep in mind that this script will break existing legacy `mona.py` installations based on PyKD 0.2.0.x and Python 2.
@@ -41,7 +41,7 @@ Please keep in mind that this script will break existing legacy `mona.py` instal
 This script allows you to run `!load pykd` in WinDBG(x), loading the `pykd-ext` extension (`pykd.dll`).
 That provides you with the ability to run PyKD/Python scripts via `!py`.
 
-You can run Python scripts with `!py -3.9` or `!py -3.14` (including [mona.py](https://github.com/corelan/mona3))  
+You can run Python scripts with`!py -3.14` (including [mona.py](https://github.com/corelan/mona3))  
 
 
 ## PyKD for Windows 7
