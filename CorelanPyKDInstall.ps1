@@ -1098,8 +1098,8 @@ function Install-PyKD64
     Write-Output "    Registering msdia100.dll (continue if missing)"
     Register-DllSilent -DllPath $msdia100_64 -Bitness x64 -ContinueOnMissing
 
-    Write-Output "    Registering msdia120.dll"
-    Register-DllSilent -DllPath $msdia120_32 -Bitness x86
+    Write-Output "    Registering msdia120.dll (continue if missing)"
+    Register-DllSilent -DllPath $msdia120_32 -Bitness x86 -ContinueOnMissing
 }
 
 function Install-Python314
