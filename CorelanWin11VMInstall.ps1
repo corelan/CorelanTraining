@@ -48,8 +48,8 @@ $classicDbgBase = "C:\Program Files (x86)\Windows Kits\10\Debuggers"
 $engineExt32 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions32"
 $engineExt64 = Join-Path $env:LOCALAPPDATA "DBG\EngineExtensions"
 $userExtensions = Join-Path $env:USERPROFILE "AppData\dbg\UserExtensions"
-$python31432Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314-32"
-$python31464Root = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314"
+$python31432DefaultRoot = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314-32"
+$python31464DefaultRoot = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314"
 $vcShared32 = "C:\Program Files (x86)\Common Files\Microsoft Shared\VC"
 $vcShared64 = "C:\Program Files\Common Files\Microsoft Shared\VC"
 $msdia140Target = Join-Path $vcShared32 "msdia140.dll"
@@ -938,6 +938,74 @@ function Assert-PythonModuleInstalled
     }
 }
 
+function Get-PythonRuntimeFromLauncher
+{
+    param(
+        [string]$Selector
+    )
+
+    try
+    {
+        $launcherOutput = @(& py $Selector -c "import sys; print(sys.executable); print(sys.version.split()[0]); print(sys.base_prefix)" 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $launcherOutput.Count -ge 3)
+        {
+            return [pscustomobject]@{
+                Executable       = $launcherOutput[0].Trim()
+                Version          = $launcherOutput[1].Trim()
+                Root             = $launcherOutput[2].Trim()
+                ResolutionSource = "py launcher"
+                ResolutionDetail = "Resolved via 'py $Selector -c'"
+            }
+        }
+    }
+    catch
+    {
+    }
+
+    try
+    {
+        $launcherHelpOutput = @(& py $Selector '/?' 2>&1)
+        foreach ($line in $launcherHelpOutput)
+        {
+            if ($line -match '^\s*usage:\s+(.+?python(?:w)?\.exe)\s')
+            {
+                $pythonExe = $matches[1].Trim()
+                if (-not (Test-Path $pythonExe -PathType Leaf))
+                {
+                    continue
+                }
+
+                $detectedVersion = $null
+                try
+                {
+                    $detectedVersion = (& $pythonExe -c "import sys; print(sys.version.split()[0])" 2>$null | Select-Object -First 1)
+                    if ($detectedVersion)
+                    {
+                        $detectedVersion = $detectedVersion.Trim()
+                    }
+                }
+                catch
+                {
+                    $detectedVersion = $null
+                }
+
+                return [pscustomobject]@{
+                    Executable       = $pythonExe
+                    Version          = $detectedVersion
+                    Root             = Split-Path -Parent $pythonExe
+                    ResolutionSource = "py launcher help"
+                    ResolutionDetail = "Resolved by parsing 'py $Selector /?' usage output"
+                }
+            }
+        }
+    }
+    catch
+    {
+    }
+
+    return $null
+}
+
 function Get-PythonRuntimeInfo
 {
     param(
@@ -960,22 +1028,17 @@ function Get-PythonRuntimeInfo
     $pythonExe = $null
     $pythonHome = $null
     $detectedVersion = $null
+    $resolutionSource = $null
+    $resolutionDetail = $null
 
-    try
+    $launcherRuntime = Get-PythonRuntimeFromLauncher -Selector $Selector
+    if ($launcherRuntime)
     {
-        $launcherOutput = @(& py $Selector -c "import os, sys; print(sys.executable); print(sys.version.split()[0]); print(os.path.dirname(os.path.dirname(sys.executable)))" 2>$null)
-        if ($LASTEXITCODE -eq 0 -and $launcherOutput.Count -ge 3)
-        {
-            $pythonExe = $launcherOutput[0].Trim()
-            $detectedVersion = $launcherOutput[1].Trim()
-            $pythonHome = $launcherOutput[2].Trim()
-        }
-    }
-    catch
-    {
-        $pythonExe = $null
-        $pythonHome = $null
-        $detectedVersion = $null
+        $pythonExe = $launcherRuntime.Executable
+        $detectedVersion = $launcherRuntime.Version
+        $pythonHome = $launcherRuntime.Root
+        $resolutionSource = $launcherRuntime.ResolutionSource
+        $resolutionDetail = $launcherRuntime.ResolutionDetail
     }
 
     if (-not $pythonExe)
@@ -985,13 +1048,19 @@ function Get-PythonRuntimeInfo
         {
             $pythonExe = $fallbackExe
             $pythonHome = $PythonRoot
+            $resolutionSource = "default path fallback"
+            $resolutionDetail = "Resolved via fallback path $fallbackExe"
 
             try
             {
-                $detectedVersion = (& $pythonExe -c "import sys; print(sys.version.split()[0])" 2>$null | Select-Object -First 1)
-                if ($detectedVersion)
+                $fallbackOutput = @(& $pythonExe -c "import sys; print(sys.version.split()[0]); print(sys.base_prefix)" 2>$null)
+                if ($LASTEXITCODE -eq 0 -and $fallbackOutput.Count -ge 1)
                 {
-                    $detectedVersion = $detectedVersion.Trim()
+                    $detectedVersion = $fallbackOutput[0].Trim()
+                    if ($fallbackOutput.Count -ge 2)
+                    {
+                        $pythonHome = $fallbackOutput[1].Trim()
+                    }
                 }
             }
             catch
@@ -1008,11 +1077,25 @@ function Get-PythonRuntimeInfo
             Write-Output "       winget: $line"
         }
         Write-Output "       Found $Label at $pythonExe ($detectedVersion)"
+        if ($resolutionSource)
+        {
+            Write-Output "          Source      : $resolutionSource"
+        }
+        if ($resolutionDetail)
+        {
+            Write-Output "          Detail      : $resolutionDetail"
+        }
+        if ($pythonHome)
+        {
+            Write-Output "          Python root : $pythonHome"
+        }
         return [pscustomobject]@{
-            Found      = $true
-            Executable = $pythonExe
-            Root       = $pythonHome
-            Version    = $detectedVersion
+            Found            = $true
+            Executable       = $pythonExe
+            Root             = $pythonHome
+            Version          = $detectedVersion
+            ResolutionSource = $resolutionSource
+            ResolutionDetail = $resolutionDetail
         }
     }
 
@@ -1022,6 +1105,18 @@ function Get-PythonRuntimeInfo
         if ($pythonExe)
         {
             Write-Output "       Path: $pythonExe"
+        }
+        if ($resolutionSource)
+        {
+            Write-Output "       Source: $resolutionSource"
+        }
+        if ($resolutionDetail)
+        {
+            Write-Output "       Detail: $resolutionDetail"
+        }
+        if ($pythonHome)
+        {
+            Write-Output "       Python root: $pythonHome"
         }
     }
     elseif ($matchingWingetLines.Count -gt 0)
@@ -1038,10 +1133,12 @@ function Get-PythonRuntimeInfo
     }
 
     return [pscustomobject]@{
-        Found      = $false
-        Executable = $pythonExe
-        Root       = $pythonHome
-        Version    = $detectedVersion
+        Found            = $false
+        Executable       = $pythonExe
+        Root             = $pythonHome
+        Version          = $detectedVersion
+        ResolutionSource = $resolutionSource
+        ResolutionDetail = $resolutionDetail
     }
 }
 
@@ -1105,19 +1202,21 @@ function Install-Python314
 {
     Write-Output "    2. Python 3.14.4 (32-bit and 64-bit)"
 
-    $python31432Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python31432Root + '"'
-    $python31464Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1 TargetDir="' + $python31464Root + '"'
+    $python31432Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1'
+    $python31464Args = '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0 Include_launcher=1 SimpleInstall=1'
 
-    $python314x86 = Get-PythonRuntimeInfo -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 32-bit" -WingetVersionMatch "3.14"
+    $python314x86 = Get-PythonRuntimeInfo -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 32-bit" -WingetVersionMatch "3.14"
     if (-not $python314x86.Found)
     {
         Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python31432installer) -Arguments $python31432Args -Description "Installing Python 3.14.4 32-bit"
+        $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
     }
 
-    $python314x64 = Get-PythonRuntimeInfo -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 64-bit" -WingetVersionMatch "3.14"
+    $python314x64 = Get-PythonRuntimeInfo -Selector "-3.14-64" -PythonRoot $python31464DefaultRoot -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 64-bit" -WingetVersionMatch "3.14"
     if (-not $python314x64.Found)
     {
         Run-ProcessChecked -FilePath (Join-Path $env:tempfolder $env:python31464installer) -Arguments $python31464Args -Description "Installing Python 3.14.4 64-bit"
+        $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
     }
 }
 
@@ -1125,8 +1224,8 @@ function Upgrade-Pip314
 {
     Write-Output "       Updating pip in Python 3.14.4 (x86/x64)"
 
-    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
-    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Run-ProcessChecked -FilePath $python314x86.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.14.4 32-bit"
     Run-ProcessChecked -FilePath $python314x64.Executable -Arguments "-m pip install --upgrade pip" -Description "Updating pip for Python 3.14.4 64-bit"
@@ -1163,8 +1262,8 @@ function Install-PyKD314
 
     $pykd314Wheel32 = Get-ExtractedWheelPath -ExtractPath $pykd314X86Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x86"
     $pykd314Wheel64 = Get-ExtractedWheelPath -ExtractPath $pykd314X64Extract -WheelNamePattern "*cp314*.whl" -Label "PyKD cp314 x64"
-    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
-    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     Write-Output "       Using wheel: $pykd314Wheel32"
     Run-ProcessChecked -FilePath $python314x86.Executable -Arguments ('-m pip install --force-reinstall --no-deps "' + $pykd314Wheel32 + '"') -Description "Installing PyKD for Python 3.14.4 32-bit"
@@ -1202,8 +1301,8 @@ function Install-KeystoneEngine314
 {
     Write-Output "       Installing keystone-engine via pip in Python 3.14.4 (x86/x64)"
 
-    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
-    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
+    $python314x86 = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+    $python314x64 = Get-PythonRuntimeChecked -Selector "-3.14-64" -PythonRoot $python31464DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 64-bit"
 
     if (Test-PythonModuleInstalled -PythonExe $python314x86.Executable -ModuleName "keystone")
     {
@@ -1440,7 +1539,7 @@ if (Test-Path $env:tempfolder -PathType Container)
     $python314x86ForMsdia = $null
     try
     {
-        $python314x86ForMsdia = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432Root -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
+        $python314x86ForMsdia = Get-PythonRuntimeChecked -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -WingetVersionMatch "3.14" -Label "Python 3.14.4 32-bit"
     }
     catch
     {
