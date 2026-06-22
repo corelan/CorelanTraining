@@ -839,6 +839,224 @@ function Test-7ZipInstalled
     return $false
 }
 
+function Test-Python27Installed
+{
+    return (Test-Path "C:\Python27\python.exe" -PathType Leaf)
+}
+
+function Test-Python31432Installed
+{
+    $runtime = Get-PythonRuntimeInfo -Selector "-3.14-32" -PythonRoot $python31432DefaultRoot -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 32-bit" -WingetVersionMatch "3.14" -Silent
+    return [bool]$runtime.Found
+}
+
+function Test-Python31464Installed
+{
+    $runtime = Get-PythonRuntimeInfo -Selector "-3.14-64" -PythonRoot $python31464DefaultRoot -ExpectedVersionPrefix "3.14.4" -Label "Python 3.14.4 64-bit" -WingetVersionMatch "3.14" -Silent
+    return [bool]$runtime.Found
+}
+
+function Test-ClassicWinDbgInstalled
+{
+    $knownPaths = @(
+        (Join-Path $classicDbgBase 'x86\windbg.exe'),
+        (Join-Path $classicDbgBase 'x64\windbg.exe')
+    )
+
+    foreach ($path in $knownPaths)
+    {
+        if (Test-Path $path -PathType Leaf)
+        {
+            return $true
+        }
+    }
+
+    $programFolder = Get-WinDbgProgramFolder
+    if ($programFolder -and (Test-Path (Join-Path $programFolder 'x86\windbg.exe') -PathType Leaf))
+    {
+        return $true
+    }
+
+    return $false
+}
+
+function Test-WinDbgXInstalled
+{
+    $knownPaths = @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\WinDbgX.exe'),
+        (Join-Path $env:ProgramFiles 'WindowsApps')
+    )
+
+    if (Get-Command WinDbgX -ErrorAction SilentlyContinue)
+    {
+        return $true
+    }
+
+    foreach ($path in $knownPaths)
+    {
+        if ((Test-Path $path -PathType Leaf) -or (Test-Path $path -PathType Container))
+        {
+            if ($path -like '*WindowsApps')
+            {
+                $winDbgXApp = Get-ChildItem -Path $path -Filter 'Microsoft.WinDbg_*' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($winDbgXApp)
+                {
+                    return $true
+                }
+            }
+            else
+            {
+                return $true
+            }
+        }
+    }
+
+    if (Get-Command winget -ErrorAction SilentlyContinue)
+    {
+        return (Test-WingetPackageInstalled -PackageId "Microsoft.WinDbg")
+    }
+
+    return $false
+}
+
+function Test-VCRedistInstalled
+{
+    $uninstallRoots = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+
+    foreach ($root in $uninstallRoots)
+    {
+        $entries = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue
+        foreach ($entry in $entries)
+        {
+            if ($entry.DisplayName -match 'Microsoft Visual C\+\+ .*Redistributable' -and $entry.DisplayName -match 'x86')
+            {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Test-VC2010RedistInstalled
+{
+    $uninstallRoots = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+
+    foreach ($root in $uninstallRoots)
+    {
+        $entries = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue
+        foreach ($entry in $entries)
+        {
+            if ($entry.DisplayName -match 'Microsoft Visual C\+\+ 2010' -and $entry.DisplayName -match 'x86')
+            {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Test-MonaInstalled
+{
+    return (Test-Path 'C:\Tools\mona3\mona.py' -PathType Leaf)
+}
+
+function Test-WindbgLibInstalled
+{
+    return (Test-Path 'C:\Tools\mona3\windbglib.py' -PathType Leaf)
+}
+
+function Test-PyKdExtensionX86Installed
+{
+    return (Test-Path (Join-Path $engineExt32 'pykd.dll') -PathType Leaf)
+}
+
+function Test-PyKdExtensionX64Installed
+{
+    return (Test-Path (Join-Path $engineExt64 'pykd.dll') -PathType Leaf)
+}
+
+function Test-VisualStudio2017DesktopExpressInstalled
+{
+    $knownPaths = @(
+        'C:\Program Files (x86)\Microsoft Visual Studio\2017\WDExpress\Common7\IDE\WDExpress.exe',
+        'C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\devenv.exe'
+    )
+
+    foreach ($path in $knownPaths)
+    {
+        if (Test-Path $path -PathType Leaf)
+        {
+            return $true
+        }
+    }
+
+    $uninstallRoots = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+
+    foreach ($root in $uninstallRoots)
+    {
+        $entries = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue
+        foreach ($entry in $entries)
+        {
+            if ($entry.DisplayName -match 'Visual Studio.*(WDExpress|Community|Desktop)')
+            {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Get-InstallStatusRows
+{
+    return @(
+        [pscustomobject]@{ Tool = 'Python 2.7.18'; Installed = (Test-Python27Installed) }
+        [pscustomobject]@{ Tool = 'Python 3.14.4 32-bit'; Installed = (Test-Python31432Installed) }
+        [pscustomobject]@{ Tool = 'Python 3.14.4 64-bit'; Installed = (Test-Python31464Installed) }
+        [pscustomobject]@{ Tool = 'VC++ Redistributable x86'; Installed = (Test-VCRedistInstalled) }
+        [pscustomobject]@{ Tool = 'VC++ 2010 SP1 Redistributable x86'; Installed = (Test-VC2010RedistInstalled) }
+        [pscustomobject]@{ Tool = 'Classic WinDbg'; Installed = (Test-ClassicWinDbgInstalled) }
+        [pscustomobject]@{ Tool = 'WinDbgX'; Installed = (Test-WinDbgXInstalled) }
+        [pscustomobject]@{ Tool = 'mona.py'; Installed = (Test-MonaInstalled) }
+        [pscustomobject]@{ Tool = 'windbglib.py'; Installed = (Test-WindbgLibInstalled) }
+        [pscustomobject]@{ Tool = 'PyKD extension x86'; Installed = (Test-PyKdExtensionX86Installed) }
+        [pscustomobject]@{ Tool = 'PyKD extension x64'; Installed = (Test-PyKdExtensionX64Installed) }
+        [pscustomobject]@{ Tool = 'Visual Studio Code'; Installed = (Test-VisualStudioCodeInstalled) }
+        [pscustomobject]@{ Tool = '7-Zip'; Installed = (Test-7ZipInstalled) }
+        [pscustomobject]@{ Tool = 'Visual Studio 2017 Desktop Express'; Installed = (Test-VisualStudio2017DesktopExpressInstalled) }
+    )
+}
+
+function Show-InstallStatusTable
+{
+    param(
+        [string]$Title = 'Install status'
+    )
+
+    Write-Output ""
+    Write-Output "[+] $Title"
+
+    $rows = Get-InstallStatusRows | ForEach-Object {
+        [pscustomobject]@{
+            Status = if ($_.Installed) { 'OK' } else { '--' }
+            Tool   = $_.Tool
+        }
+    }
+
+    $rows | Format-Table -AutoSize | Out-String -Width 200 | Write-Output
+}
+
 function Run-ProcessChecked
 {
     param(
@@ -1013,10 +1231,14 @@ function Get-PythonRuntimeInfo
         [string]$PythonRoot,
         [string]$ExpectedVersionPrefix,
         [string]$Label,
-        [string]$WingetVersionMatch
+        [string]$WingetVersionMatch,
+        [switch]$Silent
     )
 
-    Write-Output "       Checking for $Label"
+    if (-not $Silent)
+    {
+        Write-Output "       Checking for $Label"
+    }
 
     $wingetLines = Get-WingetPythonLines
     $matchingWingetLines = @()
@@ -1074,20 +1296,26 @@ function Get-PythonRuntimeInfo
     {
         foreach ($line in $matchingWingetLines)
         {
-            Write-Output "       winget: $line"
+            if (-not $Silent)
+            {
+                Write-Output "       winget: $line"
+            }
         }
-        Write-Output "       Found $Label at $pythonExe ($detectedVersion)"
-        if ($resolutionSource)
+        if (-not $Silent)
         {
-            Write-Output "          Source      : $resolutionSource"
-        }
-        if ($resolutionDetail)
-        {
-            Write-Output "          Detail      : $resolutionDetail"
-        }
-        if ($pythonHome)
-        {
-            Write-Output "          Python root : $pythonHome"
+            Write-Output "       Found $Label at $pythonExe ($detectedVersion)"
+            if ($resolutionSource)
+            {
+                Write-Output "          Source      : $resolutionSource"
+            }
+            if ($resolutionDetail)
+            {
+                Write-Output "          Detail      : $resolutionDetail"
+            }
+            if ($pythonHome)
+            {
+                Write-Output "          Python root : $pythonHome"
+            }
         }
         return [pscustomobject]@{
             Found            = $true
@@ -1101,35 +1329,47 @@ function Get-PythonRuntimeInfo
 
     if ($detectedVersion)
     {
-        Write-Output "       $Label found, but version is $detectedVersion (expected $ExpectedVersionPrefix)"
-        if ($pythonExe)
+        if (-not $Silent)
         {
-            Write-Output "       Path: $pythonExe"
-        }
-        if ($resolutionSource)
-        {
-            Write-Output "       Source: $resolutionSource"
-        }
-        if ($resolutionDetail)
-        {
-            Write-Output "       Detail: $resolutionDetail"
-        }
-        if ($pythonHome)
-        {
-            Write-Output "       Python root: $pythonHome"
+            Write-Output "       $Label found, but version is $detectedVersion (expected $ExpectedVersionPrefix)"
+            if ($pythonExe)
+            {
+                Write-Output "       Path: $pythonExe"
+            }
+            if ($resolutionSource)
+            {
+                Write-Output "       Source: $resolutionSource"
+            }
+            if ($resolutionDetail)
+            {
+                Write-Output "       Detail: $resolutionDetail"
+            }
+            if ($pythonHome)
+            {
+                Write-Output "       Python root: $pythonHome"
+            }
         }
     }
     elseif ($matchingWingetLines.Count -gt 0)
     {
         foreach ($line in $matchingWingetLines)
         {
-            Write-Output "       winget: $line"
+            if (-not $Silent)
+            {
+                Write-Output "       winget: $line"
+            }
         }
-        Write-Output "       $Label is reported by winget, but no matching interpreter path was resolved"
+        if (-not $Silent)
+        {
+            Write-Output "       $Label is reported by winget, but no matching interpreter path was resolved"
+        }
     }
     else
     {
-        Write-Output "       $Label not found"
+        if (-not $Silent)
+        {
+            Write-Output "       $Label not found"
+        }
     }
 
     return [pscustomobject]@{
@@ -1413,6 +1653,8 @@ $bytes[0x15] = $bytes[0x15] -bor 0x20
 [System.IO.File]::WriteAllBytes($shortcutPath, $bytes)
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+Show-InstallStatusTable -Title "Tool status before installation"
 
 if (Test-Path $env:tempfolder -PathType Container)
 {
@@ -1715,6 +1957,8 @@ if (Test-Path $env:tempfolder -PathType Container)
     Invoke-NonFatalStep "Launch Visual Studio 2017 Desktop Express installer" {
         Start-Process (Join-Path $env:tempfolder $env:vscommunityfile) -Wait -ErrorAction Stop
     }
+
+    Show-InstallStatusTable -Title "Tool status after installation"
 
     Write-Output "[+] Launching WinDBG to check if everything is ok"
     Write-Output "    ==> Please check the WinDBG log window and confirm that:"
